@@ -1,0 +1,463 @@
+#!/usr/bin/env python3
+"""
+Incoming Port Tester - Tests which ports are accessible from the internet.
+
+Tests TCP/UDP ports to determine if ISP is blocking incoming connections.
+"""
+
+import argparse
+import signal
+import socket
+import subprocess
+import sys
+import threading
+import time
+from typing import Optional, Tuple
+
+# Exit codes
+EXIT_PASS = 0
+EXIT_FAIL = 1  # Connection failed
+EXIT_SEND = 2  # Client message didn't reach server
+EXIT_SUDO = 4  # Privilege error
+EXIT_USED = 8  # Port in use
+EXIT_RECV = 16  # Server message didn't reach client
+EXIT_ERRO = 64  # Other error
+
+# Test message
+CLIENT_MSG = "client -> server\n"
+SERVER_MSG = "server -> client\n"
+
+
+def is_localhost(target: str) -> bool:
+    """Check if target is localhost."""
+    target_lower = target.lower()
+    return (target_lower == 'localhost' or 
+            target_lower == '127.0.0.1' or 
+            target_lower == '::1' or
+            target_lower == '0.0.0.0')
+
+
+def test_tcp_port(port: int, timeout: int, target: str) -> int:
+    """Test a single TCP port. Returns exit code."""
+    error_code = 0
+    server_ready = threading.Event()
+    server_error = threading.Event()
+    
+    def tcp_server():
+        nonlocal error_code
+        server_socket = None
+        try:
+            server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server_socket.bind(('0.0.0.0', port))
+            server_socket.listen(1)
+            server_socket.settimeout(timeout)
+            server_ready.set()
+            
+            try:
+                conn, addr = server_socket.accept()
+                conn.settimeout(timeout)
+                
+                # Receive client message
+                try:
+                    data = conn.recv(1024).decode('utf-8')
+                    if data != CLIENT_MSG:
+                        error_code |= EXIT_SEND
+                except socket.timeout:
+                    error_code |= EXIT_SEND
+                
+                # Send server message
+                try:
+                    conn.sendall(SERVER_MSG.encode('utf-8'))
+                except socket.timeout:
+                    error_code |= EXIT_RECV
+                
+                conn.close()
+            except socket.timeout:
+                error_code |= EXIT_FAIL
+            finally:
+                if server_socket:
+                    server_socket.close()
+        except PermissionError:
+            error_code |= EXIT_SUDO
+            server_error.set()
+        except OSError as e:
+            if e.errno == 98:  # Address already in use
+                error_code |= EXIT_USED
+            else:
+                error_code |= EXIT_ERRO
+            server_error.set()
+        except Exception:
+            error_code |= EXIT_ERRO
+            server_error.set()
+    
+    # Start server thread
+    server_thread = threading.Thread(target=tcp_server, daemon=True)
+    server_thread.start()
+    
+    # Wait for server to be ready or error
+    if server_error.wait(timeout=1):
+        return error_code
+    
+    if not server_ready.wait(timeout=1):
+        return EXIT_ERRO
+    
+    # Try to connect as client
+    try:
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client_socket.settimeout(timeout)
+        client_socket.connect((target, port))
+        
+        # Send client message
+        try:
+            client_socket.sendall(CLIENT_MSG.encode('utf-8'))
+        except socket.timeout:
+            error_code |= EXIT_SEND
+        
+        # Receive server message
+        try:
+            data = client_socket.recv(1024).decode('utf-8')
+            if data != SERVER_MSG:
+                error_code |= EXIT_RECV
+        except socket.timeout:
+            error_code |= EXIT_RECV
+        
+        client_socket.close()
+    except (socket.timeout, ConnectionRefusedError, OSError):
+        error_code |= EXIT_FAIL
+    
+    # Wait for server thread to finish
+    server_thread.join(timeout=timeout + 1)
+    
+    return error_code
+
+
+def test_udp_port(port: int, timeout: int, target: str) -> int:
+    """Test a single UDP port. Returns exit code."""
+    error_code = 0
+    server_ready = threading.Event()
+    server_error = threading.Event()
+    client_addr = None
+    received_client_msg = threading.Event()
+    
+    def udp_server():
+        nonlocal error_code, client_addr
+        server_socket = None
+        try:
+            server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server_socket.bind(('0.0.0.0', port))
+            server_socket.settimeout(timeout)
+            server_ready.set()
+            
+            # Receive client message
+            try:
+                data, addr = server_socket.recvfrom(1024)
+                received_data = data.decode('utf-8')
+                if received_data == CLIENT_MSG:
+                    client_addr = addr
+                    received_client_msg.set()
+                else:
+                    error_code |= EXIT_SEND
+            except socket.timeout:
+                error_code |= EXIT_SEND
+            
+            # Send server message back
+            if received_client_msg.is_set() and client_addr:
+                try:
+                    server_socket.sendto(SERVER_MSG.encode('utf-8'), client_addr)
+                except Exception:
+                    error_code |= EXIT_RECV
+            
+            if server_socket:
+                server_socket.close()
+        except PermissionError:
+            error_code |= EXIT_SUDO
+            server_error.set()
+        except OSError as e:
+            if e.errno == 98:  # Address already in use
+                error_code |= EXIT_USED
+            else:
+                error_code |= EXIT_ERRO
+            server_error.set()
+        except Exception:
+            error_code |= EXIT_ERRO
+            server_error.set()
+    
+    # Start server thread
+    server_thread = threading.Thread(target=udp_server, daemon=True)
+    server_thread.start()
+    
+    # Wait for server to be ready or error
+    if server_error.wait(timeout=1):
+        return error_code
+    
+    if not server_ready.wait(timeout=1):
+        return EXIT_ERRO
+    
+    # Try to send as client
+    try:
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        client_socket.settimeout(timeout)
+        
+        # Send client message
+        try:
+            client_socket.sendto(CLIENT_MSG.encode('utf-8'), (target, port))
+        except Exception:
+            error_code |= EXIT_SEND
+        
+        # Receive server message
+        try:
+            data, addr = client_socket.recvfrom(1024)
+            received_data = data.decode('utf-8')
+            if received_data != SERVER_MSG:
+                error_code |= EXIT_RECV
+        except socket.timeout:
+            error_code |= EXIT_RECV
+        
+        client_socket.close()
+    except Exception:
+        error_code |= EXIT_ERRO
+    
+    # Wait for server thread to finish
+    server_thread.join(timeout=timeout + 1)
+    
+    return error_code
+
+
+def test_single_port(port: int, tcp: bool, udp: bool, timeout: int, target: str) -> int:
+    """Test a single port. Returns exit code."""
+    if tcp and udp:
+        # Test both
+        tcp_code = test_tcp_port(port, timeout, target)
+        udp_code = test_udp_port(port, timeout, target)
+        # Return combined code if both failed, or the worst one
+        if tcp_code != 0 and udp_code != 0:
+            return tcp_code | udp_code
+        return max(tcp_code, udp_code)
+    elif tcp:
+        return test_tcp_port(port, timeout, target)
+    elif udp:
+        return test_udp_port(port, timeout, target)
+    else:
+        return EXIT_ERRO
+
+
+def code_to_status(code: int) -> str:
+    """Convert exit code to status string."""
+    if code == 0:
+        return "PASS"
+    elif code == 1:
+        return "FAIL"
+    elif code == 2:
+        return "SEND"
+    elif code == 4:
+        return "SUDO"
+    elif code == 8:
+        return "USED"
+    elif code == 16:
+        return "RECV"
+    elif code == 64:
+        return "ERRO"
+    else:
+        return "MULT"
+
+
+def parse_port_range(port_str: str) -> Tuple[int, int]:
+    """Parse port range string like '1-16384' or '80'. Auto-reverses if start > end."""
+    if '-' in port_str:
+        start, end = port_str.split('-', 1)
+        start_int = int(start)
+        end_int = int(end)
+        # Auto-reverse if start > end
+        if start_int > end_int:
+            return end_int, start_int
+        return start_int, end_int
+    else:
+        port = int(port_str)
+        return port, port
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Test incoming ports to check ISP blocking'
+    )
+    
+    # Test single port mode
+    parser.add_argument('--test-single-port', type=int, metavar='PORT',
+                       help='Test a single port and exit with code (no output)')
+    
+    # Configuration options
+    parser.add_argument('--ports', type=str, default='1-16384',
+                       help='Port range to test (default: 1-16384)')
+    parser.add_argument('--no-group', action='store_true',
+                       help='Disable grouping consecutive identical results')
+    parser.add_argument('--netcat-path', type=str,
+                       help='Path to netcat (not used, kept for compatibility)')
+    parser.add_argument('--timeout', type=int, default=3,
+                       help='Timeout in seconds (default: 3)')
+    parser.add_argument('--always-print-protocol', action='store_true',
+                       help='Print TCP/UDP even if only one was specified')
+    parser.add_argument('--tcp-only', action='store_true',
+                       help='Test TCP only')
+    parser.add_argument('--udp-only', action='store_true',
+                       help='Test UDP only')
+    parser.add_argument('--error-codes', action='store_true',
+                       help='Print error codes instead of words')
+    parser.add_argument('--target', type=str, default='127.0.0.1',
+                       help='Target IP address to test (default: 127.0.0.1)')
+    parser.add_argument('--quiet', action='store_true',
+                       help='Suppress warnings')
+    
+    args = parser.parse_args()
+    
+    # Handle single port test mode
+    if args.test_single_port is not None:
+        tcp = not args.udp_only
+        udp = not args.tcp_only
+        if args.tcp_only and args.udp_only:
+            tcp = True
+            udp = True
+        code = test_single_port(args.test_single_port, tcp, udp, args.timeout, args.target)
+        sys.exit(code)
+    
+    # Main mode: test port range
+    tcp = not args.udp_only
+    udp = not args.tcp_only
+    if args.tcp_only and args.udp_only:
+        tcp = True
+        udp = True
+    
+    start_port, end_port = parse_port_range(args.ports)
+    
+    # Warn if target is localhost (only in main mode)
+    if not args.quiet and is_localhost(args.target):
+        print("WARNING: Target is localhost. All tests should succeed.", file=sys.stderr)
+        print("WARNING: To test external connectivity, use your external IP address with --target", file=sys.stderr)
+    
+    # Determine protocol string
+    protocol_str = ""
+    if args.always_print_protocol or (tcp and udp):
+        if tcp and udp:
+            protocol_str = "TCP/UDP "
+        elif tcp:
+            protocol_str = "TCP "
+        elif udp:
+            protocol_str = "UDP "
+    
+    # Set up signal handler for graceful Ctrl+C
+    interrupted = threading.Event()
+    
+    def signal_handler(signum, frame):
+        interrupted.set()
+        # Finish current line and exit
+        print("\nInterrupted.", file=sys.stderr)
+        sys.exit(130)  # Standard exit code for SIGINT
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    # Test ports with progressive output
+    try:
+        if args.no_group:
+            # Print each result as it comes (no grouping)
+            for port in range(start_port, end_port + 1):
+                if interrupted.is_set():
+                    break
+                    
+                # Invoke self in test mode
+                cmd = [sys.executable, __file__, '--test-single-port', str(port),
+                       '--timeout', str(args.timeout), '--target', args.target]
+                if args.tcp_only:
+                    cmd.append('--tcp-only')
+                if args.udp_only:
+                    cmd.append('--udp-only')
+                
+                try:
+                    result = subprocess.run(cmd, capture_output=True)
+                    code = result.returncode
+                except KeyboardInterrupt:
+                    print("\nInterrupted.", file=sys.stderr)
+                    sys.exit(130)
+                
+                status = code_to_status(code) if not args.error_codes else str(code)
+                print(f"[{status}] {protocol_str}{port}")
+        else:
+            # Progressive output with grouping
+            current_group_start = None
+            current_group_end = None
+            current_proto = None
+            current_status = None
+            
+            for port in range(start_port, end_port + 1):
+                if interrupted.is_set():
+                    break
+                    
+                # Invoke self in test mode
+                cmd = [sys.executable, __file__, '--test-single-port', str(port),
+                       '--timeout', str(args.timeout), '--target', args.target]
+                if args.tcp_only:
+                    cmd.append('--tcp-only')
+                if args.udp_only:
+                    cmd.append('--udp-only')
+                
+                try:
+                    result = subprocess.run(cmd, capture_output=True)
+                    code = result.returncode
+                except KeyboardInterrupt:
+                    # Finish current line
+                    if current_group_start is not None:
+                        if current_group_start == current_group_end:
+                            print(f"\r[{current_status}] {current_proto}{current_group_start}")
+                        else:
+                            print(f"\r[{current_status}] {current_proto}{current_group_start}-{current_group_end}")
+                    print("\nInterrupted.", file=sys.stderr)
+                    sys.exit(130)
+                
+                status = code_to_status(code) if not args.error_codes else str(code)
+                
+                # Check if this port continues the current group
+                if (current_group_start is not None and 
+                    status == current_status and 
+                    protocol_str == current_proto):
+                    # Extend current group
+                    current_group_end = port
+                    # Print updated group progress to stderr (updating same line)
+                    if current_group_start == current_group_end:
+                        print(f"\r[{current_status}] {current_proto}{current_group_start}", end='', flush=True, file=sys.stderr)
+                    else:
+                        print(f"\r[{current_status}] {current_proto}{current_group_start}-{current_group_end}", end='', flush=True, file=sys.stderr)
+                else:
+                    # Finish previous group (if any)
+                    if current_group_start is not None:
+                        # Clear stderr line and print final line to stdout
+                        print("\r", end='', file=sys.stderr, flush=True)
+                        if current_group_start == current_group_end:
+                            print(f"[{current_status}] {current_proto}{current_group_start}", file=sys.stdout)
+                        else:
+                            print(f"[{current_status}] {current_proto}{current_group_start}-{current_group_end}", file=sys.stdout)
+                    
+                    # Start new group
+                    current_group_start = port
+                    current_group_end = port
+                    current_status = status
+                    current_proto = protocol_str
+                    
+                    # Print new group to stderr (updating same line)
+                    print(f"\r[{current_status}] {current_proto}{current_group_start}", end='', flush=True, file=sys.stderr)
+            
+            # Finish the last group
+            if current_group_start is not None and not interrupted.is_set():
+                # Clear stderr line and print final line to stdout
+                print("\r", end='', file=sys.stderr, flush=True)
+                if current_group_start == current_group_end:
+                    print(f"[{current_status}] {current_proto}{current_group_start}", file=sys.stdout)
+                else:
+                    print(f"[{current_status}] {current_proto}{current_group_start}-{current_group_end}", file=sys.stdout)
+    except KeyboardInterrupt:
+        print("\nInterrupted.", file=sys.stderr)
+        sys.exit(130)
+
+
+if __name__ == '__main__':
+    main()
