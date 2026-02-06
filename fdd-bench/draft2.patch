@@ -1,0 +1,280 @@
+--- draft1.sh	2026-02-05 16:21:31.049754593 -0500
++++ draft2.sh	2026-02-05 16:57:37.319792373 -0500
+@@ -2,8 +2,14 @@
+ 
+ set -euo pipefail
+ 
+-CHUNK_MIB=128
+-SRC_SIZE_MIB=1024
++# ---------------------------------------------------------------------------
++# Configuration (all overridable via env vars)
++# ---------------------------------------------------------------------------
++
++FDD_BENCH_CHUNK_MIB="${FDD_BENCH_CHUNK_MIB:-128}"
++FDD_BENCH_SRC_SIZE_MIB="${FDD_BENCH_SRC_SIZE_MIB:-1024}"
++FDD_BENCH_ROUNDS="${FDD_BENCH_ROUNDS:-8}"
++FDD_BENCH_FIND_MAXDEPTH="${FDD_BENCH_FIND_MAXDEPTH:-4}"
+ 
+ # ---------------------------------------------------------------------------
+ # Plumbing
+@@ -11,7 +17,7 @@
+ 
+ find-big-file() {
+   local mountpoint="$1"
+-  find "$mountpoint" -maxdepth 4 -type f -printf '%s %P\n' 2>/dev/null \
++  find "$mountpoint" -maxdepth "$FDD_BENCH_FIND_MAXDEPTH" -type f -printf '%s %P\n' 2>/dev/null \
+     | sort -rn | head -1 | cut -d' ' -f2-
+ }
+ 
+@@ -34,10 +40,16 @@
+ }
+ 
+ init() {
++  local size_mib="${1:-$FDD_BENCH_SRC_SIZE_MIB}"
++  local size_bytes=$(( size_mib * 1048576 ))
+   local tmpfile
+   tmpfile=$(mktemp /tmp/fdd-bench-XXXXXXXX.bin)
+-  >&2 echo "Generating ${SRC_SIZE_MIB} MiB random data -> $tmpfile ..."
+-  dd if=/dev/urandom of="$tmpfile" bs=1M count="$SRC_SIZE_MIB" status=progress
++  >&2 echo "Generating ${size_mib} MiB random data -> $tmpfile ..."
++  if command -v openssl &>/dev/null; then
++    openssl rand -out "$tmpfile" "$size_bytes"
++  else
++    dd if=/dev/urandom of="$tmpfile" bs=1M count="$size_mib" status=none
++  fi
+   echo "$tmpfile"
+ }
+ 
+@@ -45,6 +57,13 @@
+   echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null
+ }
+ 
++ensure-sudo() {
++  if ! sudo -n true 2>/dev/null; then
++    >&2 echo "Need sudo for drop-caches. Authenticating now..."
++    sudo true
++  fi
++}
++
+ timed-write() {
+   local src_file="$1"
+   local offset_mib="$2"
+@@ -56,7 +75,7 @@
+   start=$(date +%s.%N)
+   dd if="$src_file" of="$dest_file" \
+     bs=1M count="$chunk_mib" skip="$offset_mib" \
+-    conv=fsync status=none
++    oflag=direct conv=fsync status=none
+   end=$(date +%s.%N)
+ 
+   elapsed=$(echo "$end - $start" | bc)
+@@ -101,7 +120,7 @@
+ Usage: fdd-bench.sh <subcommand> [args...]
+ 
+ Main:
+-  full-bench MOUNTPOINT [ROUNDS]   Run alternating read/write benchmark (default 8 rounds)
++  full-bench MOUNTPOINT            Run alternating read/write benchmark
+   gnuplot DATAFILE                 Render ASCII plot from benchmark TSV
+   pngplot DATAFILE                 Render PNG plot from benchmark TSV to stdout
+ 
+@@ -109,12 +128,19 @@
+   find-big-file MOUNTPOINT         Find largest file on drive (prints relative path)
+   file-size-mib FILE               Print file size in MiB
+   random-offset SIZE_MIB CHUNK_MIB Print random 1MiB-aligned offset
+-  init                             Generate 1 GiB random source file (prints path)
++  init [SIZE_MIB]                  Generate random source file (prints path)
+   drop-caches                      Drop page cache (needs sudo)
++  ensure-sudo                      Pre-authenticate sudo
+   timed-write SRC OFF DEST CHUNK ROUND   One write round (prints TSV line)
+   timed-read  SRC OFF CHUNK ROUND        One read round (prints TSV line)
+   clean MOUNTPOINT                 Remove benchmark artifacts
+ 
++Environment variables:
++  FDD_BENCH_ROUNDS=8               Number of write/read round pairs
++  FDD_BENCH_CHUNK_MIB=128          Chunk size per round in MiB
++  FDD_BENCH_SRC_SIZE_MIB=1024      Random source file size in MiB
++  FDD_BENCH_FIND_MAXDEPTH=4        Max directory depth for find-big-file
++
+ Example:
+   $ ./fdd-bench.sh find-big-file /media/vasiliy/Ventoy
+   isos/linux/ubuntu-22.04.5-desktop-amd64.iso
+@@ -124,9 +150,41 @@
+ EOF
+ }
+ 
++detect-plateau() {
++  # Reads a list of numbers from stdin, one per line.
++  # Compares the average of the first half to the average of the second half.
++  # If the second half is <=80% of the first half, reports a plateau at the
++  # second-half average. Otherwise reports "no plateau detected".
++  # Prints the result to stdout.
++  awk '
++    { vals[NR] = $1; n = NR }
++    END {
++      if (n < 4) { printf "too few data points\n"; exit }
++      mid = int(n / 2)
++      sum1 = 0; sum2 = 0
++      for (i = 1; i <= mid; i++) sum1 += vals[i]
++      for (i = mid + 1; i <= n; i++) sum2 += vals[i]
++      avg1 = sum1 / mid
++      avg2 = sum2 / (n - mid)
++      if (avg2 <= avg1 * 0.8) {
++        printf "plateau detected at %.1f MB/s (dropped from %.1f MB/s)\n", avg2, avg1
++      } else {
++        printf "no plateau detected (avg %.1f MB/s)\n", (sum1 + sum2) / n
++      }
++    }
++  '
++}
++
+ full-bench() {
+   local mountpoint="$1"
+-  local rounds="${2:-8}"
++  local rounds="$FDD_BENCH_ROUNDS"
++  local chunk="$FDD_BENCH_CHUNK_MIB"
++  local src_size="$FDD_BENCH_SRC_SIZE_MIB"
++  local label
++  label=$(basename "$mountpoint")
++
++  # Pre-auth sudo so it doesn't prompt mid-benchmark
++  ensure-sudo
+ 
+   # Find big file for reads
+   local bigfile_rel
+@@ -134,13 +192,21 @@
+   local bigfile_path="$mountpoint/$bigfile_rel"
+   local bigfile_size_mib
+   bigfile_size_mib=$(file-size-mib "$bigfile_path")
+-  >&2 echo "Read source: $bigfile_rel (${bigfile_size_mib} MiB)"
++  >&2 echo "[$label] Read source: $bigfile_rel (${bigfile_size_mib} MiB)"
++
++  # Sanity check
++  if (( bigfile_size_mib < chunk )); then
++    >&2 echo "ERROR: Big file (${bigfile_size_mib} MiB) is smaller than chunk size (${chunk} MiB)"
++    exit 1
++  fi
+ 
+   # Generate random source for writes
+   local src_file
+-  src_file=$(init)
++  src_file=$(init "$src_size")
+   trap "rm -f '$src_file'" EXIT
+-  >&2 echo "Write source: $src_file (${SRC_SIZE_MIB} MiB)"
++  >&2 echo "[$label] Write source: $src_file (${src_size} MiB)"
++  >&2 echo "[$label] Starting $rounds rounds of ${chunk} MiB write/read..."
++  >&2 echo ""
+ 
+   local dest_file="$mountpoint/fdd-bench-output.bin"
+ 
+@@ -153,29 +219,30 @@
+   for (( i = 1; i <= rounds; i++ )); do
+     # --- Write round ---
+     local w_offset w_line w_secs w_mbps
+-    w_offset=$(random-offset "$SRC_SIZE_MIB" "$CHUNK_MIB")
+-    w_line=$(timed-write "$src_file" "$w_offset" "$dest_file" "$CHUNK_MIB" "$i")
++    w_offset=$(random-offset "$src_size" "$chunk")
++    w_line=$(timed-write "$src_file" "$w_offset" "$dest_file" "$chunk" "$i")
+     echo "$w_line"
+     w_secs=$(echo "$w_line" | cut -f4)
+     w_mbps=$(echo "$w_line" | cut -f5)
+     write_speeds+=("$w_mbps")
+     >&2 printf "[WRITE %2d/%d]  offset=%4dMiB  %d MiB in %ss  →  %s MB/s\n" \
+-      "$i" "$rounds" "$w_offset" "$CHUNK_MIB" "$w_secs" "$w_mbps"
++      "$i" "$rounds" "$w_offset" "$chunk" "$w_secs" "$w_mbps"
+ 
+     # --- Read round ---
+     local r_offset r_line r_secs r_mbps
+-    r_offset=$(random-offset "$bigfile_size_mib" "$CHUNK_MIB")
+-    r_line=$(timed-read "$bigfile_path" "$r_offset" "$CHUNK_MIB" "$i")
++    r_offset=$(random-offset "$bigfile_size_mib" "$chunk")
++    r_line=$(timed-read "$bigfile_path" "$r_offset" "$chunk" "$i")
+     echo "$r_line"
+     r_secs=$(echo "$r_line" | cut -f4)
+     r_mbps=$(echo "$r_line" | cut -f5)
+     read_speeds+=("$r_mbps")
+     >&2 printf "[READ  %2d/%d]  offset=%4dMiB  %d MiB in %ss  →  %s MB/s\n" \
+-      "$i" "$rounds" "$r_offset" "$CHUNK_MIB" "$r_secs" "$r_mbps"
++      "$i" "$rounds" "$r_offset" "$chunk" "$r_secs" "$r_mbps"
+   done
+ 
+   # Summary
+-  >&2 echo "--- Summary ---"
++  >&2 echo ""
++  >&2 echo "--- $label Summary ---"
+   >&2 printf "Write: %s\n" "$(printf '%s\n' "${write_speeds[@]}" | awk '
+     { s+=$1; if(NR==1||$1<min)min=$1; if($1>max)max=$1; n++ }
+     END { printf "avg=%.1f min=%.1f max=%.1f MB/s", s/n, min, max }
+@@ -184,6 +251,8 @@
+     { s+=$1; if(NR==1||$1<min)min=$1; if($1>max)max=$1; n++ }
+     END { printf "avg=%.1f min=%.1f max=%.1f MB/s", s/n, min, max }
+   ')"
++  >&2 printf "Write: %s\n" "$(printf '%s\n' "${write_speeds[@]}" | detect-plateau)"
++  >&2 printf "Read:  %s\n" "$(printf '%s\n' "${read_speeds[@]}" | detect-plateau)"
+ 
+   # Cleanup
+   rm -f "$src_file"
+@@ -192,15 +261,20 @@
+ }
+ 
+ gnuplot() {
+-  local datafile="${1:--}"
++  local datafile="${1:-/dev/stdin}"
++  local data
++  data=$(cat "$datafile")
+ 
+   local write_data read_data
+-  write_data=$(awk -F'\t' '$1 == "write" { print $2, $5 }' "$datafile")
+-  read_data=$(awk -F'\t' '$1 == "read" { print $2, $5 }' "$datafile")
++  write_data=$(echo "$data" | awk -F'\t' '$1 == "write" { print $2, $5 }')
++  read_data=$(echo "$data" | awk -F'\t' '$1 == "read" { print $2, $5 }')
++
++  local title
++  title="${FDD_BENCH_PLOT_TITLE:-Flash Drive Benchmark}"
+ 
+   command gnuplot <<GNUPLOT
+ set terminal dumb size 120 30
+-set title "Flash Drive Benchmark"
++set title "$title"
+ set xlabel "Round"
+ set ylabel "MB/s"
+ set key top right
+@@ -216,16 +290,21 @@
+ }
+ 
+ pngplot() {
+-  local datafile="${1:--}"
++  local datafile="${1:-/dev/stdin}"
++  local data
++  data=$(cat "$datafile")
+ 
+   local write_data read_data
+-  write_data=$(awk -F'\t' '$1 == "write" { print $2, $5 }' "$datafile")
+-  read_data=$(awk -F'\t' '$1 == "read" { print $2, $5 }' "$datafile")
++  write_data=$(echo "$data" | awk -F'\t' '$1 == "write" { print $2, $5 }')
++  read_data=$(echo "$data" | awk -F'\t' '$1 == "read" { print $2, $5 }')
++
++  local title
++  title="${FDD_BENCH_PLOT_TITLE:-Flash Drive Benchmark}"
+ 
+   command gnuplot <<GNUPLOT
+ set terminal pngcairo size 1200,600 enhanced font "sans,12"
+ set output "/dev/stdout"
+-set title "Flash Drive Benchmark"
++set title "$title"
+ set xlabel "Round"
+ set ylabel "MB/s"
+ set key top right
+@@ -241,4 +320,13 @@
+ GNUPLOT
+ }
+ 
++# ---------------------------------------------------------------------------
++# Dispatch
++# ---------------------------------------------------------------------------
++
++if [[ $# -eq 0 ]]; then
++  usage
++  exit 1
++fi
++
+ "$@"

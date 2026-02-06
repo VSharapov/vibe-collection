@@ -1,0 +1,10 @@
+--- draft3.sh	2026-02-05 17:16:35.274417671 -0500
++++ draft4.sh	2026-02-05 22:13:36.223539733 -0500
+@@ -55,6 +55,7 @@
+ }
+ 
+ drop-caches() {
++  sync
+   if [[ $EUID -eq 0 ]]; then
+     echo 3 > /proc/sys/vm/drop_caches
+   else
