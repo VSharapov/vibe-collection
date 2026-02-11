@@ -1,0 +1,671 @@
+user:
+<user_query>
+Time for a little cursor agent introspection
+For this conversation, never actually invoke `agent` or `cursor-agent` or anything similar. That could be a disaster.
+Instead try to figure out the file structure used.
+When I do agen --resume I get a cool menu: 
+────────────────────────────────────────────────────────────
+                 Sessions and Cloud Agents
+────────────────────────────────────────────────────────────
+  ▶   Hostname IP Fallback                Today 07:47 PM    
+      Glibc 2.39                              5 days ago    
+      Say Test                                5 days ago    
+      Glibc Version Check                     5 days ago    
+      Wifi Log Analyzer            Jan 29, 2026 04:48 PM    
+      Clean Up Plan                Jan 29, 2026 01:05 PM    
+      Why 404 APT                  Jan 29, 2026 12:45 PM    
+      Apt Update Query             Jan 29, 2026 11:50 AM    
+      Rotor Wifi MAC               Jan 27, 2026 10:45 PM    
+      SSH System Examiner          Jan 23, 2026 09:24 AM    
+      New Agent                    Jan 22, 2026 10:56 AM    
+      X131e Voulge Migration       Jan 17, 2026 04:05 PM    
+      Sudo Access                  Jan 16, 2026 02:32 PM    
+      Sudo DD Now                  Jan 16, 2026 02:27 PM    
+      NVMe Speed Test              Jan 16, 2026 02:20 PM    
+      Netboot Verifier             Jan 16, 2026 02:15 PM    
+      Router Lease Admin           Jan 15, 2026 08:20 AM    
+      Firewall Advisor             Jan 14, 2026 07:01 PM    
+      Network Troubleshooter       Jan 14, 2026 05:15 PM    
+      Ethtool One-Liner             Jan 9, 2026 01:46 PM    
+      Remote Branch Sync            Jan 9, 2026 10:32 AM    
+      CIDR Lister                   Jan 7, 2026 12:09 PM    
+      Rotor Sudo Check              Jan 5, 2026 08:23 PM    
+      Disk Finder                   Jan 5, 2026 01:39 PM    
+      New Agent                     Jan 5, 2026 01:08 PM    
+      New Agent                    Dec 31, 2025 09:55 AM    
+      New Agent                    Dec 30, 2025 02:34 PM    
+      New Agent                    Dec 28, 2025 10:39 AM    
+      New Agent                    Dec 28, 2025 09:19 AM    
+      New Agent                    Dec 28, 2025 08:34 AM    
+      New Agent                    Dec 27, 2025 01:47 PM    
+      New Agent                    Dec 27, 2025 11:29 AM    
+      New Agent                    Dec 18, 2025 04:11 PM    
+      New Agent                     Dec 8, 2025 03:34 PM    
+      New Agent                    Nov 24, 2025 05:47 PM    
+      New Agent                    Nov 21, 2025 03:07 PM    
+      New Agent                    Nov 20, 2025 10:52 AM    
+      New Agent                    Nov 19, 2025 12:31 PM    
+      Nmcli Agent                  Nov 18, 2025 03:57 PM    
+      Ping Nuc99                   Nov 18, 2025 02:39 PM    
+      SSH Rotor                    Nov 11, 2025 05:48 PM    
+      ADB Phone Check              Nov 10, 2025 06:12 PM    
+      Book Drive Summary           Nov 10, 2025 06:02 PM    
+      Recent Zip Files             Nov 10, 2025 05:59 PM    
+      ADB Pair Check               Nov 10, 2025 05:31 PM    
+      Island Port Check             Nov 9, 2025 03:11 AM    
+      Disposable VM Plan            Nov 6, 2025 01:20 PM    
+      EWIS List                     Nov 6, 2025 12:56 PM    
+      Partition Size Checker        Nov 3, 2025 10:56 AM    
+      Make Error Helper             Nov 3, 2025 09:53 AM    
+      Video Compressor             Oct 31, 2025 02:14 PM    
+      SSH Disk Lister              Oct 30, 2025 05:53 PM    
+      Rotor Block List             Oct 30, 2025 02:09 PM    
+      Precise Time C               Oct 28, 2025 04:22 PM    
+      IP A                         Oct 23, 2025 10:21 AM    
+           1/65 • ↑↓/jk: navigate • Enter: select • Backspac
+────────────────────────────────────────────────────────────
+1/65 • ↑↓/jk: navigate • Enter: select • Backspace: delete k
+
+But these short names are auto generated and don't always have the info I need
+What I really want is a full text search that I can pipe through fzf, or grep all the files
+For now, find a conversation, any conversation, and show me how you find the shortnme and the full text.
+</user_query>
+
+assistant:
+[Thinking] The user wants me to find where the Cursor agent stores its conversation/session data on disk. They use `agen --resume` (which is likely an alias for `cursor-agent` or similar) and see a list of sessions. They want to find the actual files on disk so they can do full-text search.
+
+Let me look for common locations where Cursor agent might store session data. Typical locations would be:
+- `~/.cursor/` 
+- `~/.config/cursor/`
+- `~/.cursor-agent/`
+
+Let me explore.
+Let me explore where Cursor agent stores its session data on disk.
+[Tool call] LS
+  target_directory: /home/vasiliy/.cursor
+[Tool call] Glob
+  glob_pattern: **/cursor-agent*
+  target_directory: /home/vasiliy/.config
+
+[Tool result] LS
+
+[Tool result] Glob
+
+assistant:
+[Thinking] Interesting! I can see there's a lot of structure here. The key files seem to be:
+
+1. `/home/vasiliy/.cursor/agent-cli-state.json` - likely contains the session list with short names
+2. `/home/vasiliy/.cursor/projects/*/agent-transcripts/*.txt` - these are the full conversation transcripts
+3. `/home/vasiliy/.cursor/chats/*/store.db` - SQLite databases with chat data
+
+Let me look at the `agent-cli-state.json` first to see the session metadata, and then look at a transcript file.
+Interesting structure. Let me look at the session index and a transcript file.
+[Tool call] Read
+  path: /home/vasiliy/.cursor/agent-cli-state.json
+[Tool call] Read
+  path: /home/vasiliy/.cursor/projects/tmp/agent-transcripts/0066dfa6-1458-4c11-93a0-b4e53bc284e0.txt
+  limit: 80
+
+[Tool result] Read
+
+[Tool result] Read
+
+assistant:
+[Thinking] So the transcript files are plain text with the full conversation. Now I need to find where the short names (like "X131e Voulge Migration") are stored. They're probably in the SQLite `store.db` files. Let me check the `d42b9c57d24cf5db3bd8d332dc35437f` directory which has 65 .db files — that's probably the `/tmp` workspace which has the most sessions.
+
+Actually wait, looking more carefully at the structure:
+- `/home/vasiliy/.cursor/chats/<workspace-hash>/<session-uuid>/store.db` - chat data
+
+
+- `/home/vasiliy/.cursor/projects/<workspace-path>/agent-transcripts/<session-uuid>.txt` - transcript text
+
+The session UUIDs match between the two locations, so I can cross-reference them. The short names are likely stored in the store.db files.
+
+Let me check the `d42b9c57d24cf5db3bd8d332dc35437f` directory since it has 65 .db files that should correspond to the 65 sessions shown in the menu.
+Found it. The transcripts are plain text files in `~/.cursor/projects/*/agent-transcripts/`. Now let me find where the short names are stored — probably in the SQLite databases.
+[Tool call] Shell
+  command: sqlite3 /home/vasiliy/.cursor/chats/c77cd19d7b00d9b07ea8b26e837e51ba/0ef7fa6f-e702-4896-b3b8-4bcef31d812a/store.db ".tables"
+  description: List tables in a chat store.db
+[Tool call] LS
+  target_directory: /home/vasiliy/.cursor/chats/d42b9c57d24cf5db3bd8d332dc35437f
+
+[Tool result] Shell
+
+[Tool result] LS
+
+assistant:
+[Thinking] That directory has 65 UUIDs, matching the "1/65" in the menu. So `d42b9c57d24cf5db3bd8d332dc35437f` is the workspace hash for `/tmp` (the default workspace). The store.db files are SQLite databases. Since sqlite3 isn't installed, let me try python3 to query it.
+
+Let me also look at the transcript files to see what's in them. I already saw the one for `0066dfa6` which was the x131e migration. Let me see if the short name is in the db file. Let me use python.
+65 UUIDs matching the 65 sessions in the menu. No `sqlite3` CLI, so let me use Python to peek inside a store.db.
+[Tool call] Shell
+  command: python3 -c "
+import sqlite3
+db = sqlite3.connect('/home/vasiliy/.cursor/chats/d42b9c57d24cf5db3bd8d332dc35437f/0066dfa6-1458-4c11-93a0-b4e53bc284e0/store.db')
+cursor = db.cursor()
+# Get all tables
+cursor.execute(\"SELECT name FROM sqlite_master WHERE type='table'\")
+tables = cursor.fetchall()
+print('Tables:', tables)
+for t in tables:
+    tname = t[0]
+    cursor.execute(f'PRAGMA table_info({tname})')
+    cols = cursor.fetchall()
+    print(f'\nTable {tname} columns:')
+    for c in cols:
+        print(f'  {c}')
+    cursor.execute(f'SELECT * FROM {tname} LIMIT 3')
+    rows = cursor.fetchall()
+    print(f'  Sample rows ({len(rows)}):')
+    for r in rows:
+        val = str(r)
+        if len(val) > 300:
+            val = val[:300] + '...'
+        print(f'    {val}')
+db.close()
+"
+
+  description: Query store.db schema and sample data
+  timeout: 10000
+
+[Tool result] Shell
+
+assistant:
+[Thinking] The `meta` table has a `value` that looks like hex-encoded JSON. Let me decode that to find the name.
+The `meta` table has hex-encoded JSON. Let me decode that.
+[Tool call] Shell
+  command: python3 -c "
+import sqlite3, json
+db = sqlite3.connect('/home/vasiliy/.cursor/chats/d42b9c57d24cf5db3bd8d332dc35437f/0066dfa6-1458-4c11-93a0-b4e53bc284e0/store.db')
+cursor = db.cursor()
+cursor.execute('SELECT value FROM meta WHERE key=\"0\"')
+row = cursor.fetchone()
+hex_str = row[0]
+decoded = bytes.fromhex(hex_str).decode('utf-8')
+meta = json.loads(decoded)
+print(json.dumps(meta, indent=2))
+db.close()
+"
+
+  description: Decode hex meta value from store.db
+  timeout: 10000
+
+[Tool result] Shell
+
+assistant:
+There we go. Here's the full picture:
+
+**File structure:**
+
+1. **Session metadata** (including the short name) lives in SQLite databases at:
+   `~/.cursor/chats/<workspace-hash>/<session-uuid>/store.db`
+   
+   The `meta` table, key `"0"`, contains hex-encoded JSON with fields like:
+   - `agentId` — the session UUID
+   - `name` — **this is the short name** (e.g. "X131e Voulge Migration")
+   - `createdAt` — epoch millis
+   - `mode`, `lastUsedModel`, etc.
+
+2. **Full conversation transcripts** are plain text files at:
+   `~/.cursor/projects/<workspace-path-slug>/agent-transcripts/<session-uuid>.txt`
+   
+   These contain the entire conversation in a readable `user:` / `assistant:` / `[Tool call]` / `[Tool result]` format.
+
+3. The **workspace hash** `d42b9c57d24cf5db3bd8d332dc35437f` maps to the `tmp` project directory (which has 65 sessions — matching your 65-item menu). Other workspaces have their own hash directories under `~/.cursor/chats/`.
+
+**For a quick demo** — the session `0066dfa6-1458-4c11-93a0-b4e53bc284e0`:
+- Short name: **"X131e Voulge Migration"** (from `store.db` meta)
+- Full transcript: `/home/vasiliy/.cursor/projects/tmp/agent-transcripts/0066dfa6-1458-4c11-93a0-b4e53bc284e0.txt` — starts with the user asking to set up a migration project from x131e to voulge
+
+**For full-text search**, you could do something like:
+
+```bash
+# grep all transcripts
+rg "some search term" ~/.cursor/projects/*/agent-transcripts/
+
+# or pipe through fzf with preview
+rg -l "search term" ~/.cursor/projects/*/agent-transcripts/ | fzf --preview 'head -50 {}'
+```
+
+And to build a name-to-file index, a small Python script could iterate all `store.db` files, decode the meta, and print `name → transcript path` mappings.
+
+user:
+<user_query>
+I installed sqlite, develop a similar one-liner to get the shortname of a uuid
+</user_query>
+
+assistant:
+[Tool call] Shell
+  command: sqlite3 /home/vasiliy/.cursor/chats/d42b9c57d24cf5db3bd8d332dc35437f/0066dfa6-1458-4c11-93a0-b4e53bc284e0/store.db "SELECT value FROM meta WHERE key='0'" | python3 -c "import sys,json; print(json.loads(bytes.fromhex(sys.stdin.read().strip()))['name'])"
+  description: One-liner to get shortname from store.db
+
+[Tool result] Shell
+
+assistant:
+Here's the one-liner:
+
+```bash
+sqlite3 ~/.cursor/chats/d42b9c57d24cf5db3bd8d332dc35437f/0066dfa6-1458-4c11-93a0-b4e53bc284e0/store.db "SELECT value FROM meta WHERE key='0'" | python3 -c "import sys,json; print(json.loads(bytes.fromhex(sys.stdin.read().strip()))['name'])"
+```
+
+The hex decoding step is unfortunate but necessary — sqlite3 gives you the raw hex string, then Python decodes it and pulls the `name` field. You could generalize it with a wildcard glob to dump all names:
+
+```bash
+for db in ~/.cursor/chats/*/*/store.db; do
+  uuid=$(basename "$(dirname "$db")")
+  name=$(sqlite3 "$db" "SELECT value FROM meta WHERE key='0'" 2>/dev/null | python3 -c "import sys,json; print(json.loads(bytes.fromhex(sys.stdin.read().strip()))['name'])" 2>/dev/null)
+  [ -n "$name" ] && printf '%s\t%s\n' "$name" "$uuid"
+done
+```
+
+user:
+<user_query>
+lite3 ~/.cursor/chats/d42b9c57d24cf5db3bd8d332dc35437f/0066dfa6-1458-4c11-93a0-b4e53bc284e0/store.db "SELECT value FROM meta WHERE key='0'" | python3 -c "import sys,json;                                       
+Use jq
+</user_query>
+
+assistant:
+[Thinking] The user wants to avoid the python3 step and use jq instead. The challenge is the hex decoding. Let me think... sqlite3 outputs a hex string. We need to decode hex to get JSON, then extract the name with jq.
+
+We could use `xxd -r -p` to decode the hex, then pipe to jq.
+[Tool call] Shell
+  command: sqlite3 ~/.cursor/chats/d42b9c57d24cf5db3bd8d332dc35437f/0066dfa6-1458-4c11-93a0-b4e53bc284e0/store.db "SELECT value FROM meta WHERE key='0'" | xxd -r -p | jq -r .name
+  description: Get shortname using xxd and jq
+
+[Tool result] Shell
+
+assistant:
+Much cleaner:
+
+```bash
+sqlite3 ~/.cursor/chats/d42b9c57d24cf5db3bd8d332dc35437f/0066dfa6-1458-4c11-93a0-b4e53bc284e0/store.db "SELECT value FROM meta WHERE key='0'" | xxd -r -p | jq -r .name
+```
+
+`xxd -r -p` does the hex-to-binary decode, then `jq` pulls the name.
+
+user:
+<user_query>
+IDK the d42b9c57d24cf5db3bd8d332dc35437f
+Can it still be a oneliner?
+</user_query>
+
+assistant:
+[Tool call] Shell
+  command: sqlite3 ~/.cursor/chats/*/0066dfa6-1458-4c11-93a0-b4e53bc284e0/store.db "SELECT value FROM meta WHERE key='0'" | xxd -r -p | jq -r .name
+  description: Wildcard the workspace hash
+
+[Tool result] Shell
+
+assistant:
+Just wildcard the workspace hash:
+
+```bash
+sqlite3 ~/.cursor/chats/*/0066dfa6-1458-4c11-93a0-b4e53bc284e0/store.db "SELECT value FROM meta WHERE key='0'" | xxd -r -p | jq -r .name
+```
+
+Though it took ~2 minutes because the glob has to scan every workspace directory. If that's annoying, you could do a faster find-based version, but for a quick lookup it works.
+
+user:
+<user_query>
+Read /home/vasiliy/src/vibe-collection/fdd-bench/WORKFLOW.md
+I want a script I can use to like, grep  > list of uuids and fzf with prview and with the uuid selected get the file of the full transcript. LMK when script looks usable to you
+</user_query>
+
+assistant:
+[Tool call] Read
+  path: /home/vasiliy/src/vibe-collection/fdd-bench/WORKFLOW.md
+
+[Tool result] Read
+
+assistant:
+[Thinking] The user wants a script following this workflow pattern. Let me write a PLAN.md first, then a script. Actually, looking at the workflow, they want me to just write something usable. Let me think about what the script needs to do:
+
+1. **Plumbing functions:**
+   - `list-uuids` — list all session UUIDs from store.db files
+   - `get-name UUID` — get the short name for a UUID
+   - `get-transcript UUID` — find and cat the transcript file
+   - `search PATTERN` — grep all transcripts, output matching UUIDs with context
+
+
+2. **Porcelain:**
+   - `grep-fzf PATTERN` — grep transcripts, extract UUIDs, pipe to fzf with preview showing the name + first lines, on select output the transcript path
+
+Now I'm setting up the script structure with the necessary environment variables and starting to implement the helper functions that extract data from the Cursor chat directories.
+
+Writing the plumbing functions... I'm refining the search-fzf function to pipe search results through fzf, showing both the UUID and project name, with a preview that displays the actual transcript content. The key insight is using the dispatch pattern to let fzf call back into the script for previews, then extracting just the file path on selection.
+
+Building the bash script... Writing shell functions... Finishing the piped read loop to output transcript paths, then defining the usage message that documents all the available commands for this search utility. The script ends by dispatching to whichever command was passed as arguments, or showing usage if none were provided. I'm considering whether to add a `list-all` command next.
+
+I could scan all transcript files directly instead of the store database, which would be faster. I'm thinking through what commands would actually be useful here—maybe a basic list-all and a version that annotates with names. I should keep it simple for now and let the user request additions. One thing I need to be careful about is how special characters in search patterns get passed through fzf's preview substitution, so I'll use environment variables to avoid quoting issues.
+
+Writing the search-fzf function...
+[Tool call] Write
+  path: /home/vasiliy/tmp/2026-02-09-resumable-agents-full-text-search/cursor-search.sh
+  contents: #!/usr/bin/env bash
+set -euo pipefail
+
+CURSOR_DIR="${CURSOR_DIR:-$HOME/.cursor}"
+CHATS_DIR="$CURSOR_DIR/chats"
+PROJECTS_DIR="$CURSOR_DIR/projects"
+
+# --- plumbing ---
+
+get-name() {
+  local uuid="$1"
+  local db
+  db="$(echo "$CHATS_DIR"/*/"$uuid"/store.db)"
+  [[ -f "$db" ]] || { echo "(unknown)"; return; }
+  sqlite3 "$db" "SELECT value FROM meta WHERE key='0'" | xxd -r -p | jq -r .name
+}
+
+get-transcript-path() {
+  local uuid="$1"
+  for f in "$PROJECTS_DIR"/*/agent-transcripts/"$uuid".txt; do
+    [[ -f "$f" ]] && { echo "$f"; return; }
+  done
+}
+
+# grep transcripts, emit matching UUIDs (one per line)
+search() {
+  local pattern="$1"
+  rg -l "$pattern" "$PROJECTS_DIR"/*/agent-transcripts/*.txt 2>/dev/null \
+    | xargs -I{} basename {} .txt \
+    | sort -u
+}
+
+# read UUIDs from stdin, emit uuid<TAB>name
+annotate() {
+  while IFS= read -r uuid; do
+    local name
+    name=$(get-name "$uuid" 2>/dev/null) || name="(unknown)"
+    printf '%s\t%s\n' "$uuid" "$name"
+  done
+}
+
+# fzf preview helper: name header + grep hits from transcript
+preview() {
+  local uuid="$1"
+  local pattern="${2:-}"
+  echo "=== $(get-name "$uuid") ==="
+  echo ""
+  local tp
+  tp=$(get-transcript-path "$uuid")
+  if [[ -n "${tp:-}" ]]; then
+    if [[ -n "$pattern" ]]; then
+      rg --color=always -C2 "$pattern" "$tp" | head -80
+    else
+      head -80 "$tp"
+    fi
+  else
+    echo "(no transcript file found)"
+  fi
+}
+
+# --- porcelain ---
+
+# search + fzf picker → prints transcript path of selected session
+search-fzf() {
+  local pattern="$1"
+  search "$pattern" \
+    | annotate \
+    | fzf --delimiter=$'\t' \
+          --with-nth=2 \
+          --preview "$0 preview {1} $(printf '%q' "$pattern")" \
+          --preview-window=right:70% \
+    | cut -d$'\t' -f1 \
+    | while IFS= read -r uuid; do get-transcript-path "$uuid"; done
+}
+
+usage() {
+  >&2 cat <<'EOF'
+cursor-search — full-text search over Cursor agent transcripts
+
+Usage: cursor-search <command> [args...]
+
+Plumbing:
+  get-name <uuid>              short name for a session
+  get-transcript-path <uuid>   path to the .txt transcript
+  search <pattern>             grep transcripts, list matching UUIDs
+  annotate                     stdin UUIDs → uuid<TAB>name
+  preview <uuid> [pattern]     name + transcript excerpt (for fzf)
+
+Porcelain:
+  search-fzf <pattern>         search → fzf picker → transcript path
+
+Examples:
+  cursor-search search "nvme"
+  cursor-search search "nvme" | cursor-search annotate
+  cursor-search search-fzf "router"
+  less "$(cursor-search search-fzf "sudo")"
+EOF
+}
+
+if [[ $# -eq 0 ]]; then
+  usage
+  exit 1
+fi
+
+"$@"
+
+
+[Tool result] Write
+
+assistant:
+[Tool call] Shell
+  command: chmod +x /home/vasiliy/tmp/2026-02-09-resumable-agents-full-text-search/cursor-search.sh
+  description: Make script executable
+
+[Tool result] Shell
+
+assistant:
+Let me smoke-test the plumbing:
+[Tool call] Shell
+  command: cd /home/vasiliy/tmp/2026-02-09-resumable-agents-full-text-search && ./cursor-search.sh search "nvme" | head -5
+  description: Test search plumbing
+  timeout: 15000
+
+[Tool result] Shell
+
+assistant:
+[Tool call] Shell
+  command: cd /home/vasiliy/tmp/2026-02-09-resumable-agents-full-text-search && ./cursor-search.sh get-name bf4a7dd4-c655-4371-81c4-e22d135ba78c && ./cursor-search.sh get-transcript-path bf4a7dd4-c655-4371-81c4-e22d135ba78c
+  description: Test get-name and get-transcript-path
+  timeout: 15000
+
+[Tool result] Shell
+
+assistant:
+[Tool call] Shell
+  command: cd /home/vasiliy/tmp/2026-02-09-resumable-agents-full-text-search && echo "bf4a7dd4-c655-4371-81c4-e22d135ba78c
+d0a4c422-47a0-4988-983f-28ca8c862834" | ./cursor-search.sh annotate
+  description: Test annotate plumbing
+  timeout: 15000
+
+[Tool result] Shell
+
+assistant:
+All plumbing works. Here's what you've got:
+
+**`cursor-search.sh`** — composable plumbing + fzf porcelain:
+
+- `./cursor-search.sh search "pattern"` — greps all transcripts, emits matching UUIDs
+- `./cursor-search.sh search "pattern" | ./cursor-search.sh annotate` — same but with short names
+- `./cursor-search.sh search-fzf "pattern"` — full workflow: search, pick in fzf (preview shows name + matching lines), outputs the transcript path
+
+So the end-to-end usage would be:
+
+```bash
+less "$(./cursor-search.sh search-fzf "router")"
+```
+
+Or just pipe search results however you like:
+
+```bash
+./cursor-search.sh search "sudo" | ./cursor-search.sh annotate | fzf
+```
+
+Note: `search` took ~7s because `rg` has to glob across all the `agent-transcripts` dirs. The `get-name` / `annotate` calls are fast (~250ms each) since they hit a single sqlite file. Want me to tweak anything?
+
+user:
+<user_query>
+I'm worried. When I explored the .cursor dir there seemed to be "projects" that are dir-organized and then non-projects that are in a separate dir. Does this only handle one of them? <20 words plz
+</user_query>
+
+assistant:
+Both. `search` greps `*/agent-transcripts/*.txt` (all projects). `get-name` globs `chats/*/UUID/` (all workspace hashes).
+
+user:
+<user_query>
+Quick improvement, I think `search` can probably prop "$@" in the rg args and in your nvme usage example you can show how to make it case-insensitive, and of course this should be in noted in the usage.
+</user_query>
+
+assistant:
+[Tool call] StrReplace
+  path: /home/vasiliy/tmp/2026-02-09-resumable-agents-full-text-search/cursor-search.sh
+  old_string: # grep transcripts, emit matching UUIDs (one per line)
+search() {
+  local pattern="$1"
+  rg -l "$pattern" "$PROJECTS_DIR"/*/agent-transcripts/*.txt 2>/dev/null \
+    | xargs -I{} basename {} .txt \
+    | sort -u
+}
+  new_string: # grep transcripts, emit matching UUIDs (one per line)
+# all args are passed through to rg (e.g. -i for case-insensitive)
+search() {
+  rg -l "$@" "$PROJECTS_DIR"/*/agent-transcripts/*.txt 2>/dev/null \
+    | xargs -I{} basename {} .txt \
+    | sort -u
+}
+
+[Tool result] StrReplace
+
+assistant:
+[Tool call] StrReplace
+  path: /home/vasiliy/tmp/2026-02-09-resumable-agents-full-text-search/cursor-search.sh
+  old_string:   search <pattern>             grep transcripts, list matching UUIDs
+  new_string:   search [rg flags] <pattern>   grep transcripts, list matching UUIDs
+
+[Tool result] StrReplace
+
+assistant:
+[Tool call] StrReplace
+  path: /home/vasiliy/tmp/2026-02-09-resumable-agents-full-text-search/cursor-search.sh
+  old_string:   cursor-search search "nvme"
+  cursor-search search "nvme" | cursor-search annotate
+  new_string:   cursor-search search "nvme"
+  cursor-search search -i "nvme"
+  cursor-search search "nvme" | cursor-search annotate
+
+[Tool result] StrReplace
+
+assistant:
+Now `search` passes all args straight to `rg`, so `-i`, `-w`, `--type`, etc. all just work.
+
+user:
+<user_query>
+search-fzf could totally handle the same treatment - I only see "$1" in there 
+</user_query>
+
+assistant:
+[Tool call] StrReplace
+  path: /home/vasiliy/tmp/2026-02-09-resumable-agents-full-text-search/cursor-search.sh
+  old_string: # search + fzf picker → prints transcript path of selected session
+search-fzf() {
+  local pattern="$1"
+  search "$pattern" \
+    | annotate \
+    | fzf --delimiter=$'\t' \
+          --with-nth=2 \
+          --preview "$0 preview {1} $(printf '%q' "$pattern")" \
+          --preview-window=right:70% \
+    | cut -d$'\t' -f1 \
+    | while IFS= read -r uuid; do get-transcript-path "$uuid"; done
+}
+  new_string: # search + fzf picker → prints transcript path of selected session
+# all args are passed through to rg via search (last arg used as preview pattern)
+search-fzf() {
+  local preview_pattern="${*: -1}"
+  search "$@" \
+    | annotate \
+    | fzf --delimiter=$'\t' \
+          --with-nth=2 \
+          --preview "$0 preview {1} $(printf '%q' "$preview_pattern")" \
+          --preview-window=right:70% \
+    | cut -d$'\t' -f1 \
+    | while IFS= read -r uuid; do get-transcript-path "$uuid"; done
+}
+
+[Tool result] StrReplace
+
+assistant:
+Now `search-fzf -i "nvme"` works. It grabs the last arg as the preview highlight pattern and passes everything through to `search` (and thus `rg`).
+
+user:
+<user_query>
+Can you make the preview function do it too ? Might have to `shift` and stuff.
+</user_query>
+
+assistant:
+[Tool call] StrReplace
+  path: /home/vasiliy/tmp/2026-02-09-resumable-agents-full-text-search/cursor-search.sh
+  old_string: # fzf preview helper: name header + grep hits from transcript
+preview() {
+  local uuid="$1"
+  local pattern="${2:-}"
+  echo "=== $(get-name "$uuid") ==="
+  echo ""
+  local tp
+  tp=$(get-transcript-path "$uuid")
+  if [[ -n "${tp:-}" ]]; then
+    if [[ -n "$pattern" ]]; then
+      rg --color=always -C2 "$pattern" "$tp" | head -80
+    else
+      head -80 "$tp"
+    fi
+  else
+    echo "(no transcript file found)"
+  fi
+}
+  new_string: # fzf preview helper: name header + grep hits from transcript
+# usage: preview <uuid> [rg flags] [pattern]
+preview() {
+  local uuid="$1"; shift
+  echo "=== $(get-name "$uuid") ==="
+  echo ""
+  local tp
+  tp=$(get-transcript-path "$uuid")
+  if [[ -n "${tp:-}" ]]; then
+    if [[ $# -gt 0 ]]; then
+      rg --color=always -C2 "$@" "$tp" | head -80
+    else
+      head -80 "$tp"
+    fi
+  else
+    echo "(no transcript file found)"
+  fi
+}
+
+[Tool result] StrReplace
+
+assistant:
+Now I need to update `search-fzf` to pass all the rg args (not just the pattern) to preview too:
+[Tool call] StrReplace
+  path: /home/vasiliy/tmp/2026-02-09-resumable-agents-full-text-search/cursor-search.sh
+  old_string:   local preview_pattern="${*: -1}"
+  search "$@" \
+    | annotate \
+    | fzf --delimiter=$'\t' \
+          --with-nth=2 \
+          --preview "$0 preview {1} $(printf '%q' "$preview_pattern")" \
+  new_string:   local rg_args=()
+  for arg in "$@"; do rg_args+=("$(printf '%q' "$arg")"); done
+  search "$@" \
+    | annotate \
+    | fzf --delimiter=$'\t' \
+          --with-nth=2 \
+          --preview "$0 preview {1} ${rg_args[*]}" \
+
+[Tool result] StrReplace
+
+assistant:
+Now `-i` (or any rg flag) flows all the way through: `search-fzf` → `search` → `rg`, and also `search-fzf` → `preview` → `rg`.
