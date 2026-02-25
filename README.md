@@ -4,4 +4,5 @@
 - fdd-bench : See how fast your flash drive is. Avoid caching & buffers. Watch the speed graph reach a plateau (thermal throttle is pretty common).
 - cursor-search : `cursor search-fzf -i nvme` will bring up an fzf of all your cursor-agent transcript files that match "nvme" (with `-i`/`--ignore-case` passed to `rg`). Needs some kind of `resume` subcommand. PRs welcome.
 - gcp-tts : If you're logged into gcp and can `gcloud` this will handhold you through tts and long-running tts (which needs a bucket with permissions) and everything in between. It can set up a new project to encapsulate all this if you have cloudbilling enabled on your current/default project.
+- deterministic-ed25519 : Generate a keypair from passphrase - `./seedkey.sh generate "hunter2" ~/.ssh/id_ed25519`
 

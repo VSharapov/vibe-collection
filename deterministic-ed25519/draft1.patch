@@ -1,0 +1,73 @@
+--- seedkey.sh	2026-02-25 11:08:40.623819805 -0500
++++ draft1.sh	2026-02-25 11:08:53.923499854 -0500
+@@ -0,0 +1,70 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++SEEDKEY_COMMENT="${SEEDKEY_COMMENT:-}"
++
++seed-to-pem() {
++    local seed="${1:?seed required}"
++    local pkcs8_header='\x30\x2e\x02\x01\x00\x30\x05\x06\x03\x2b\x65\x70\x04\x22\x04\x20'
++    local der_base64
++    der_base64=$( (printf "$pkcs8_header"; echo -n "$seed" | openssl sha256 -binary) | base64 )
++    printf '%s\n' "-----BEGIN PRIVATE KEY-----" "$der_base64" "-----END PRIVATE KEY-----"
++}
++
++pem-to-private() {
++    openssl pkey -outform openssh
++}
++
++pem-to-pub() {
++    openssl pkey -pubout | ssh-keygen -i -m PKCS8 -f /dev/stdin
++}
++
++generate() {
++    local seed="${1:?seed required}"
++    local path="${2:?path required}"
++    local pubpath="${path}.pub"
++
++    if [[ -e "$path" ]]; then
++        echo >&2 "error: $path already exists"
++        exit 1
++    fi
++    if [[ -e "$pubpath" ]]; then
++        echo >&2 "error: $pubpath already exists"
++        exit 1
++    fi
++
++    local tmpfile
++    tmpfile=$(mktemp)
++    trap "rm -f '$tmpfile'" EXIT
++
++    seed-to-pem "$seed" > "$tmpfile"
++    pem-to-private < "$tmpfile" > "$path"
++    chmod 600 "$path"
++    pem-to-pub < "$tmpfile" > "$pubpath"
++    chmod 644 "$pubpath"
++
++    echo >&2 "wrote $path"
++    echo >&2 "wrote $pubpath"
++}
++
++usage() {
++    cat >&2 <<'EOF'
++Usage: seedkey.sh <command> [args...]
++
++Commands:
++  seed-to-pem <seed>        Convert seed to PKCS#8 PEM private key
++  pem-to-private            Convert PEM (stdin) to OpenSSH private key format
++  pem-to-pub                Convert PEM (stdin) to ssh-ed25519 public key line
++  generate <seed> <path>    Generate keypair at path and path.pub
++
++Environment:
++  SEEDKEY_COMMENT           Comment for public key (default: empty)
++EOF
++}
++
++if [[ $# -eq 0 ]]; then
++    usage
++    exit 1
++fi
++
++"$@"

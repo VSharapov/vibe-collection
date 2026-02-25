@@ -1,0 +1,65 @@
+--- draft1.sh	2026-02-25 11:08:53.923499854 -0500
++++ draft2.sh	2026-02-25 11:13:20.973068592 -0500
+@@ -12,11 +12,60 @@
+ }
+ 
+ pem-to-private() {
+-    openssl pkey -outform openssh
++    local pem seed pubkey checkint privlen
++    pem=$(cat)
++
++    seed=$(echo "$pem" | openssl pkey -outform DER | tail -c 32 | xxd -p -c 32)
++    pubkey=$(echo "$pem" | openssl pkey -pubout -outform DER | tail -c 32 | xxd -p -c 32)
++    checkint=$(od -An -tu4 -N4 /dev/urandom | tr -d ' ')
++
++    local commentlen=${#SEEDKEY_COMMENT}
++    local contentlen=$((4 + 4 + 4 + 11 + 4 + 32 + 4 + 64 + 4 + commentlen))
++    local padded=$(( (contentlen + 7) / 8 * 8 ))
++    local padlen=$((padded - contentlen))
++    
++    {
++        printf 'openssh-key-v1\x00'
++        printf '\x00\x00\x00\x04none'
++        printf '\x00\x00\x00\x04none'
++        printf '\x00\x00\x00\x00'
++        printf '\x00\x00\x00\x01'
++        printf '\x00\x00\x00\x33'
++        printf '\x00\x00\x00\x0bssh-ed25519'
++        printf '\x00\x00\x00\x20'
++        printf '%b' "$(echo "$pubkey" | sed 's/../\\x&/g')"
++        printf '%b' "$(printf '%08x' "$padded" | sed 's/../\\x&/g')"
++        printf '%b' "$(printf '%08x' "$checkint" | sed 's/../\\x&/g')"
++        printf '%b' "$(printf '%08x' "$checkint" | sed 's/../\\x&/g')"
++        printf '\x00\x00\x00\x0bssh-ed25519'
++        printf '\x00\x00\x00\x20'
++        printf '%b' "$(echo "$pubkey" | sed 's/../\\x&/g')"
++        printf '\x00\x00\x00\x40'
++        printf '%b' "$(echo "$seed" | sed 's/../\\x&/g')"
++        printf '%b' "$(echo "$pubkey" | sed 's/../\\x&/g')"
++        printf '%b' "$(printf '%08x' "$commentlen" | sed 's/../\\x&/g')"
++        printf '%s' "$SEEDKEY_COMMENT"
++        for ((i=1; i<=padlen; i++)); do printf "\\x$(printf '%02x' $i)"; done
++    } | base64 | fold -w 70 | {
++        echo "-----BEGIN OPENSSH PRIVATE KEY-----"
++        cat
++        echo "-----END OPENSSH PRIVATE KEY-----"
++    }
+ }
+ 
+ pem-to-pub() {
+-    openssl pkey -pubout | ssh-keygen -i -m PKCS8 -f /dev/stdin
++    local pubkey
++    pubkey=$(openssl pkey -pubout -outform DER | tail -c 32)
++    {
++        printf '\x00\x00\x00\x0bssh-ed25519'
++        printf '\x00\x00\x00\x20'
++        printf '%s' "$pubkey"
++    } | base64 | tr -d '\n' | {
++        printf 'ssh-ed25519 '
++        cat
++        [[ -n "$SEEDKEY_COMMENT" ]] && printf ' %s' "$SEEDKEY_COMMENT"
++        printf '\n'
++    }
+ }
+ 
+ generate() {

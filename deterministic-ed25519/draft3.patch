@@ -1,0 +1,23 @@
+--- draft2.sh	2026-02-25 11:13:20.973068592 -0500
++++ draft3.sh	2026-02-25 12:06:14.750191764 -0500
+@@ -17,7 +17,7 @@
+ 
+     seed=$(echo "$pem" | openssl pkey -outform DER | tail -c 32 | xxd -p -c 32)
+     pubkey=$(echo "$pem" | openssl pkey -pubout -outform DER | tail -c 32 | xxd -p -c 32)
+-    checkint=$(od -An -tu4 -N4 /dev/urandom | tr -d ' ')
++    checkint=$(echo -n "checkint:$seed" | openssl sha256 -binary | head -c 4 | od -An -tu4 | tr -d ' ')
+ 
+     local commentlen=${#SEEDKEY_COMMENT}
+     local contentlen=$((4 + 4 + 4 + 11 + 4 + 32 + 4 + 64 + 4 + commentlen))
+@@ -46,9 +46,10 @@
+         printf '%b' "$(printf '%08x' "$commentlen" | sed 's/../\\x&/g')"
+         printf '%s' "$SEEDKEY_COMMENT"
+         for ((i=1; i<=padlen; i++)); do printf "\\x$(printf '%02x' $i)"; done
+-    } | base64 | fold -w 70 | {
++    } | base64 | tr -d '\n' | fold -w 70 | {
+         echo "-----BEGIN OPENSSH PRIVATE KEY-----"
+         cat
++        echo ""
+         echo "-----END OPENSSH PRIVATE KEY-----"
+     }
+ }
