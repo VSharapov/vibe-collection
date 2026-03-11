@@ -1,0 +1,50 @@
+--- draft4.sh	2026-03-08 13:08:31.068726044 -0400
++++ draft5.sh	2026-03-11 09:34:52.202118938 -0400
+@@ -67,6 +67,30 @@
+   exit 1
+ }
+ 
++dyndns() {
++  local host="$1" domain="$2"
++  local fqdn="${host}.${domain}"
++  [[ "$host" == "@" ]] && fqdn="$domain"
++  
++  local ns
++  ns=$(dig NS "$domain" +short | head -1)
++  if [[ -z "$ns" ]]; then
++    >&2 echo "error: could not determine nameserver for $domain"
++    exit 1
++  fi
++  
++  local dns_ip ext_ip
++  dns_ip=$(dig "@${ns}" "$fqdn" A +short | head -1)
++  ext_ip=$(external-ip)
++  
++  if [[ "$dns_ip" == "$ext_ip" ]]; then
++    echo "unchanged: $fqdn -> $ext_ip"
++  else
++    update "$domain" A "$host" "$ext_ip" >/dev/null
++    echo "updated: $fqdn $dns_ip -> $ext_ip"
++  fi
++}
++
+ json-record() {
+   local type="$1" host="$2" answer="$3"
+   local ttl="${4:-$DNS_TTL}"
+@@ -215,6 +239,7 @@
+   delete <domain> <type> <host>         Delete record by type+host
+   domains                               List all domains in account
+   external-ip                           Get external IP (for dynamic DNS)
++  dyndns <host> <domain>                Update A record to external IP (if changed)
+ 
+ environment:
+   Configure credentials in ~/.config/namedotcom/*.env
+@@ -228,7 +253,7 @@
+   $me delete example.com 12345
+   $me delete example.com CNAME blog
+   $me external-ip
+-  $me update example.com A home "\$($me external-ip)"         # dyndns
++  $me dyndns datacenter1.sites example.com                    # cron-friendly
+ EOF
+ }
+ 

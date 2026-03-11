@@ -1,0 +1,160 @@
+--- dns.sh	2026-03-08 09:33:59.482984046 -0400
++++ draft1.sh	2026-03-08 09:34:17.774901931 -0400
+@@ -0,0 +1,157 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++DNS_TTL="${DNS_TTL:-300}"
++DNS_CONFIG_DIR="${DNS_CONFIG_DIR:-$HOME/.config/namedotcom}"
++
++load-config() {
++  local f
++  for f in "$DNS_CONFIG_DIR"/*.env; do
++    [[ -f "$f" ]] && source "$f"
++  done
++}
++
++require-env() {
++  local missing=()
++  [[ -z "${DNS_TOKEN_USERNAME:-}" ]] && missing+=(DNS_TOKEN_USERNAME)
++  [[ -z "${DNS_TOKEN_SECRET:-}" ]] && missing+=(DNS_TOKEN_SECRET)
++  [[ -z "${DNS_TOKEN_ENDPOINT:-}" ]] && missing+=(DNS_TOKEN_ENDPOINT)
++  if [[ ${#missing[@]} -gt 0 ]]; then
++    >&2 echo "error: missing required env vars: ${missing[*]}"
++    >&2 echo "configure in $DNS_CONFIG_DIR/*.env"
++    exit 1
++  fi
++}
++
++api() {
++  local method="$1" path="$2"
++  shift 2
++  local url="${DNS_TOKEN_ENDPOINT}/core/v1${path}"
++  local response http_code
++  response=$(curl -s -w '\n%{http_code}' \
++    -u "${DNS_TOKEN_USERNAME}:${DNS_TOKEN_SECRET}" \
++    -X "$method" \
++    -H 'Content-Type: application/json' \
++    "$@" \
++    "$url")
++  http_code=$(tail -n1 <<< "$response")
++  response=$(sed '$d' <<< "$response")
++  if [[ "$http_code" -ge 400 ]]; then
++    >&2 echo "error: API returned $http_code"
++    >&2 echo "$response" | jq -r '.message // .error // .' 2>/dev/null || >&2 echo "$response"
++    exit 1
++  fi
++  echo "$response"
++}
++
++json-record() {
++  local type="$1" host="$2" answer="$3"
++  local ttl="${4:-$DNS_TTL}"
++  local priority="${5:-}"
++  local json
++  json=$(jq -n \
++    --arg type "$type" \
++    --arg host "$host" \
++    --arg answer "$answer" \
++    --argjson ttl "$ttl" \
++    '{type: $type, host: $host, answer: $answer, ttl: $ttl}')
++  if [[ -n "$priority" ]]; then
++    json=$(echo "$json" | jq --argjson p "$priority" '. + {priority: $p}')
++  fi
++  echo "$json"
++}
++
++# --- Porcelain ---
++
++list() {
++  local domain="$1"
++  api GET "/domains/${domain}/records" | jq -r '
++    .records[]? |
++    [.id, .type, .host // "@", .answer, .ttl, .priority // ""] |
++    @tsv
++  '
++}
++
++get() {
++  local domain="$1" id="$2"
++  api GET "/domains/${domain}/records/${id}" | jq -r '
++    [.id, .type, .host // "@", .answer, .ttl, .priority // ""] |
++    @tsv
++  '
++}
++
++create() {
++  local domain="$1" type="$2" host="$3" answer="$4"
++  shift 4
++  local ttl="$DNS_TTL" priority=""
++  while [[ $# -gt 0 ]]; do
++    case "$1" in
++      --ttl) ttl="$2"; shift 2 ;;
++      --priority) priority="$2"; shift 2 ;;
++      *) >&2 echo "error: unknown option $1"; exit 1 ;;
++    esac
++  done
++  local json
++  json=$(json-record "$type" "$host" "$answer" "$ttl" "$priority")
++  api POST "/domains/${domain}/records" -d "$json"
++}
++
++update() {
++  local domain="$1" id="$2" type="$3" host="$4" answer="$5"
++  shift 5
++  local ttl="$DNS_TTL" priority=""
++  while [[ $# -gt 0 ]]; do
++    case "$1" in
++      --ttl) ttl="$2"; shift 2 ;;
++      --priority) priority="$2"; shift 2 ;;
++      *) >&2 echo "error: unknown option $1"; exit 1 ;;
++    esac
++  done
++  local json
++  json=$(json-record "$type" "$host" "$answer" "$ttl" "$priority")
++  api PUT "/domains/${domain}/records/${id}" -d "$json"
++}
++
++delete() {
++  local domain="$1" id="$2"
++  api DELETE "/domains/${domain}/records/${id}"
++}
++
++domains() {
++  api GET "/domains" | jq -r '.domains[]?.domainName'
++}
++
++usage() {
++  cat <<'EOF'
++usage: dns.sh <command> [args]
++
++commands:
++  list <domain>                         List all DNS records
++  get <domain> <id>                     Get a single record
++  create <domain> <type> <host> <answer> [--ttl N] [--priority N]
++  update <domain> <id> <type> <host> <answer> [--ttl N] [--priority N]
++  delete <domain> <id>                  Delete a record
++  domains                               List all domains in account
++
++environment:
++  Configure credentials in ~/.config/namedotcom/*.env
++  Required: DNS_TOKEN_USERNAME, DNS_TOKEN_SECRET, DNS_TOKEN_ENDPOINT
++  Optional: DNS_TTL (default 300)
++
++examples:
++  dns.sh list example.com
++  dns.sh create example.com A www 1.2.3.4
++  dns.sh create example.com MX @ mail.example.com --priority 10
++  dns.sh delete example.com 12345
++EOF
++}
++
++load-config
++require-env
++
++if [[ $# -eq 0 ]]; then
++  usage
++  exit 1
++fi
++
++"$@"

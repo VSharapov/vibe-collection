@@ -6,4 +6,5 @@
 - gcp-tts : If you're logged into gcp and can `gcloud` this will handhold you through tts and long-running tts (which needs a bucket with permissions) and everything in between. It can set up a new project to encapsulate all this if you have cloudbilling enabled on your current/default project.
 - deterministic-ed25519 : Generate a keypair from passphrase - `./seedkey.sh generate "hunter2" ~/.ssh/id_ed25519`
 - spotify-yoink : No clever tricks brute force Spotify episode downloader. Runs at 1x time in a containerized browser. `./spotify-yoink.sh rip "https://open.spotify.com/episode/..."`
+- namedotcom-dns : Manage DNS records via name.com API. e.g. - `./namedotcom-dns.sh dyndns datacenter1.sites example.com`
 

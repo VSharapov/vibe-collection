@@ -1,0 +1,119 @@
+--- draft2.sh	2026-03-08 09:49:01.692039314 -0400
++++ draft3.sh	2026-03-08 12:50:29.644594093 -0400
+@@ -73,6 +73,33 @@
+   echo "$json"
+ }
+ 
++is-record-type() {
++  case "$1" in
++    A|AAAA|ANAME|CNAME|MX|NS|SRV|TXT) return 0 ;;
++    *) return 1 ;;
++  esac
++}
++
++resolve-id() {
++  local domain="$1" type="$2" host="$3"
++  [[ "$host" == "@" ]] && host=""
++  local ids
++  ids=$(api GET "/domains/${domain}/records" | jq -r --arg t "$type" --arg h "$host" '
++    [.records[] | select(.type == $t and (.host // "") == $h) | .id] | join(" ")
++  ')
++  local count
++  count=$(wc -w <<< "$ids")
++  if [[ "$count" -eq 0 ]]; then
++    >&2 echo "error: no $type record found for host '$host'"
++    exit 1
++  elif [[ "$count" -gt 1 ]]; then
++    >&2 echo "error: multiple $type records found for host '$host' (ids: $ids)"
++    >&2 echo "use record ID directly to disambiguate"
++    exit 1
++  fi
++  echo "$ids"
++}
++
+ # --- Porcelain ---
+ 
+ list() {
+@@ -85,7 +112,14 @@
+ }
+ 
+ get() {
+-  local domain="$1" id="$2"
++  local domain="$1" id_or_type="$2"
++  local id
++  if is-record-type "$id_or_type"; then
++    local host="${3:-@}"
++    id=$(resolve-id "$domain" "$id_or_type" "$host")
++  else
++    id="$id_or_type"
++  fi
+   api GET "/domains/${domain}/records/${id}" | jq -r '
+     [.id, .type, .host // "@", .answer, .ttl, .priority // ""] |
+     @tsv
+@@ -109,8 +143,21 @@
+ }
+ 
+ update() {
+-  local domain="$1" id="$2" type="$3" host="$4" answer="$5"
+-  shift 5
++  local domain="$1" id_or_type="$2"
++  local id type host answer
++  if is-record-type "$id_or_type"; then
++    type="$id_or_type"
++    host="$3"
++    answer="$4"
++    id=$(resolve-id "$domain" "$type" "$host")
++    shift 4
++  else
++    id="$id_or_type"
++    type="$3"
++    host="$4"
++    answer="$5"
++    shift 5
++  fi
+   local ttl="$DNS_TTL" priority=""
+   while [[ $# -gt 0 ]]; do
+     case "$1" in
+@@ -125,7 +172,14 @@
+ }
+ 
+ delete() {
+-  local domain="$1" id="$2"
++  local domain="$1" id_or_type="$2"
++  local id
++  if is-record-type "$id_or_type"; then
++    local host="${3:-@}"
++    id=$(resolve-id "$domain" "$id_or_type" "$host")
++  else
++    id="$id_or_type"
++  fi
+   api DELETE "/domains/${domain}/records/${id}"
+ }
+ 
+@@ -139,10 +193,13 @@
+ 
+ commands:
+   list <domain>                         List all DNS records
+-  get <domain> <id>                     Get a single record
++  get <domain> <id>                     Get record by ID
++  get <domain> <type> <host>            Get record by type+host
+   create <domain> <type> <host> <answer> [--ttl N] [--priority N]
+   update <domain> <id> <type> <host> <answer> [--ttl N] [--priority N]
+-  delete <domain> <id>                  Delete a record
++  update <domain> <type> <host> <answer> [--ttl N] [--priority N]
++  delete <domain> <id>                  Delete record by ID
++  delete <domain> <type> <host>         Delete record by type+host
+   domains                               List all domains in account
+   external-ip                           Get external IP (for dynamic DNS)
+ 
+@@ -156,8 +213,9 @@
+   dns.sh create example.com A www 1.2.3.4
+   dns.sh create example.com MX @ mail.example.com --priority 10
+   dns.sh delete example.com 12345
++  dns.sh delete example.com CNAME blog
+   dns.sh external-ip
+-  dns.sh update example.com 12345 A home "$(dns.sh external-ip)"   # dyndns
++  dns.sh update example.com A home "$(dns.sh external-ip)"         # dyndns
+ EOF
+ }
+ 
