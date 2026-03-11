@@ -45,33 +45,52 @@ def stop_recording(proc):
     print("Recording stopped")
 
 
-def get_episode_duration(page):
-    """Try to extract episode duration from the page"""
+def parse_duration_string(text):
+    """Parse duration string like '24:47' or '2:52:06' to seconds"""
+    text = text.strip().lstrip('-')
+    parts = text.split(':')
     try:
-        # Try to get duration from JavaScript - look for time display
+        if len(parts) == 3:
+            return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+        elif len(parts) == 2:
+            return int(parts[0]) * 60 + int(parts[1])
+    except ValueError:
+        pass
+    return None
+
+
+def get_episode_duration(page):
+    """Extract episode duration from progress-timestamp element"""
+    try:
+        # Target: <span data-testid="progress-timestamp">24:47</span>
+        timestamp = page.locator('[data-testid="progress-timestamp"]').first
+        if timestamp.is_visible(timeout=3000):
+            text = timestamp.text_content(timeout=2000)
+            duration = parse_duration_string(text)
+            if duration and duration > 60:
+                return duration
+    except Exception as e:
+        print(f"Could not get duration from progress-timestamp: {e}")
+    
+    # Fallback: scan all text for duration patterns
+    try:
         duration = page.evaluate("""() => {
-            // Look for time displays showing remaining time like "-24:46"
             const timeEls = document.querySelectorAll('span, div');
             for (const el of timeEls) {
                 const text = el.textContent.trim();
-                // Match patterns like "24:47" or "-24:46" or "2:52:06"
-                const match = text.match(/^-?(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+                const match = text.match(/^-?(\\d{1,2}):(\\d{2})(?::(\\d{2}))?$/);
                 if (match) {
                     let hours = 0, mins = 0, secs = 0;
                     if (match[3]) {
-                        // HH:MM:SS format
                         hours = parseInt(match[1]);
                         mins = parseInt(match[2]);
                         secs = parseInt(match[3]);
                     } else {
-                        // MM:SS format
                         mins = parseInt(match[1]);
                         secs = parseInt(match[2]);
                     }
                     const total = hours * 3600 + mins * 60 + secs;
-                    if (total > 60) {  // Only return if > 1 minute (to avoid timestamps)
-                        return total;
-                    }
+                    if (total > 60) return total;
                 }
             }
             return null;
@@ -79,8 +98,18 @@ def get_episode_duration(page):
         if duration:
             return duration
     except Exception as e:
-        print(f"Error getting duration: {e}")
+        print(f"Fallback duration detection failed: {e}")
     return None
+
+
+def format_time(seconds):
+    """Format seconds as H:MM:SS or MM:SS"""
+    h = seconds // 3600
+    m = (seconds % 3600) // 60
+    s = seconds % 60
+    if h > 0:
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m}:{s:02d}"
 
 
 def rip_episode(url, output_file, manual_duration=0):
@@ -140,11 +169,11 @@ def rip_episode(url, output_file, manual_duration=0):
         # Determine duration
         if manual_duration > 0:
             duration = manual_duration
-            print(f"Using manual duration: {duration} seconds")
+            print(f"Using manual duration: {format_time(duration)}")
         else:
             duration = get_episode_duration(page)
             if duration:
-                print(f"Auto-detected duration: {duration} seconds ({duration//3600}h {(duration%3600)//60}m {duration%60}s)")
+                print(f"Auto-detected duration: {format_time(duration)} (+1s buffer)")
             else:
                 print("Could not determine duration, will record until manually stopped")
         
@@ -224,23 +253,36 @@ def rip_episode(url, output_file, manual_duration=0):
         result = subprocess.run(["pactl", "list", "short", "sink-inputs"], capture_output=True, text=True)
         print(f"Sink inputs: {result.stdout.strip() if result.stdout.strip() else '(none)'}")
         
-        # Check if playing
+        # Recording loop with progress
         print("Recording... Press Ctrl+C to stop early")
         
         if duration:
-            # Wait for duration + buffer
-            wait_time = duration + 10
-            print(f"Will record for {wait_time} seconds")
+            wait_time = duration + 1  # +1 second buffer
+            print(f"Total duration: {format_time(wait_time)}")
+            start_time = time.time()
             try:
-                time.sleep(wait_time)
+                while True:
+                    elapsed = int(time.time() - start_time)
+                    remaining = wait_time - elapsed
+                    if remaining <= 0:
+                        break
+                    pct = min(100, int(elapsed * 100 / wait_time))
+                    bar_len = 30
+                    filled = int(bar_len * elapsed / wait_time)
+                    bar = '=' * filled + '>' + ' ' * (bar_len - filled - 1)
+                    print(f"\r  {format_time(elapsed)} / {format_time(wait_time)} [{bar}] {pct}%  ", end="", flush=True)
+                    time.sleep(1)
+                print()  # newline after progress
             except KeyboardInterrupt:
                 print("\nStopping early...")
         else:
-            # Wait indefinitely until Ctrl+C
+            # No duration - show elapsed time only
+            start_time = time.time()
             try:
                 while True:
-                    time.sleep(10)
-                    print(".", end="", flush=True)
+                    elapsed = int(time.time() - start_time)
+                    print(f"\r  Recording: {format_time(elapsed)} (Ctrl+C to stop)  ", end="", flush=True)
+                    time.sleep(1)
             except KeyboardInterrupt:
                 print("\nStopping...")
         
