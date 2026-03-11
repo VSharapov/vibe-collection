@@ -83,9 +83,7 @@ dyndns() {
   dns_ip=$(dig "@${ns}" "$fqdn" A +short | head -1)
   ext_ip=$(external-ip)
   
-  if [[ "$dns_ip" == "$ext_ip" ]]; then
-    echo "unchanged: $fqdn -> $ext_ip"
-  else
+  if [[ "$dns_ip" != "$ext_ip" ]]; then
     update "$domain" A "$host" "$ext_ip" >/dev/null
     echo "updated: $fqdn $dns_ip -> $ext_ip"
   fi

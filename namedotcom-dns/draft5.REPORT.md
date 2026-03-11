@@ -32,6 +32,9 @@ namedotcom-dns.sh dyndns datacenter1.sites example.com
 
 ## Improvement ideas
 
-- [ ] Quiet mode (`-q`) for cron — no output unless change/error
+- [x] Default Quiet mode for cron — no output unless change/error
+  - Cron emails on ANY output (stdout/stderr), not on exit code
+  - Current behavior: prints "unchanged: ..." every run = email spam
+  - If someone really wants output they can invoke with `bash -x`
 - [ ] Log to syslog via `logger` on change
 - [ ] Support multiple host+domain pairs from config file
