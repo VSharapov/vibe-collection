@@ -1,0 +1,13 @@
+--- old.sh	2026-03-11 10:32:36.831045915 -0400
++++ namedotcom-dns.sh	2026-03-11 10:32:41.467037405 -0400
+@@ -83,9 +83,7 @@
+   dns_ip=$(dig "@${ns}" "$fqdn" A +short | head -1)
+   ext_ip=$(external-ip)
+   
+-  if [[ "$dns_ip" == "$ext_ip" ]]; then
+-    echo "unchanged: $fqdn -> $ext_ip"
+-  else
++  if [[ "$dns_ip" != "$ext_ip" ]]; then
+     update "$domain" A "$host" "$ext_ip" >/dev/null
+     echo "updated: $fqdn $dns_ip -> $ext_ip"
+   fi
