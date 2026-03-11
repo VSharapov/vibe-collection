@@ -5,7 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IMAGE_NAME="${SPOTIFY_YOINK_IMAGE:-spotify-yoink}"
-OUTPUT_DIR="${SPOTIFY_YOINK_OUTPUT:-$(pwd)}"
+OUTPUT_DIR="${SPOTIFY_YOINK_OUTPUT:-}"
 
 usage() {
   >&2 cat <<'EOF'
@@ -31,7 +31,7 @@ EXAMPLES:
 
 ENV VARS:
   SPOTIFY_YOINK_IMAGE    Docker image name (default: spotify-yoink)
-  SPOTIFY_YOINK_OUTPUT   Output directory (default: current dir)
+  SPOTIFY_YOINK_OUTPUT   Output directory (default: mktemp -d)
 EOF
 }
 
@@ -75,8 +75,15 @@ rip() {
     output="${episode_id}.mp3"
   fi
 
+  # Default output dir to mktemp -d if not set
+  local out_dir="$OUTPUT_DIR"
+  if [[ -z "$out_dir" ]]; then
+    out_dir=$(mktemp -d)
+    >&2 echo "Output dir: $out_dir"
+  fi
+
   >&2 echo "Episode ID: $episode_id"
-  >&2 echo "Output: $OUTPUT_DIR/$output"
+  >&2 echo "Output: $out_dir/$output"
   if [[ "$duration" -gt 0 ]]; then
     >&2 echo "Duration: ${duration}s (manual)"
   else
@@ -85,7 +92,9 @@ rip() {
 
   local docker_args=( 
     --rm
-    -v "$OUTPUT_DIR:/output"
+    -e "HOST_UID=$(id -u)"
+    -e "HOST_GID=$(id -g)"
+    -v "$out_dir:/output"
     "$IMAGE_NAME"
     "$url"
     -o "/output/$output"
@@ -97,7 +106,7 @@ rip() {
 
   docker run "${docker_args[@]}"
 
-  >&2 echo "Done: $OUTPUT_DIR/$output"
+  >&2 echo "Done: $out_dir/$output"
 }
 
 help() {

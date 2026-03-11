@@ -40,4 +40,12 @@ else
 fi
 
 # Run the ripper
-exec python /app/rip.py "$@"
+python /app/rip.py "$@"
+EXIT_CODE=$?
+
+# Fix ownership of output files if HOST_UID/HOST_GID are set
+if [[ -n "${HOST_UID:-}" && -n "${HOST_GID:-}" ]]; then
+    chown -R "$HOST_UID:$HOST_GID" /output/* 2>/dev/null || true
+fi
+
+exit $EXIT_CODE
