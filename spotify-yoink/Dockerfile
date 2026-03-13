@@ -39,12 +39,13 @@ RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearm
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-RUN pip install playwright
+RUN pip install playwright scipy numpy
 
 WORKDIR /app
 
 # Copy scripts
 COPY rip.py /app/rip.py
+COPY splice.py /app/splice.py
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
