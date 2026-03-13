@@ -7,4 +7,5 @@
 - deterministic-ed25519 : Generate a keypair from passphrase - `./seedkey.sh generate "hunter2" ~/.ssh/id_ed25519`
 - spotify-yoink : No clever tricks brute force Spotify episode downloader. Runs at 1x time in a containerized browser. `./spotify-yoink.sh rip "https://open.spotify.com/episode/..."`
 - namedotcom-dns : Manage DNS records via name.com API. e.g. - `./namedotcom-dns.sh dyndns datacenter1.sites example.com`
+- erasure-calc : Rule of thumb for erasure coding parity & hot spares. `./erasure.py -n 16 -s 24000` → 10+4+2hs. Check out the webUI!
 
