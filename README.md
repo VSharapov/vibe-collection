@@ -8,4 +8,5 @@
 - [spotify-yoink](./spotify-yoink) : No clever tricks brute force Spotify episode downloader. Runs at 1x time in a containerized browser. `./spotify-yoink.sh rip "https://open.spotify.com/episode/..."`
 - [namedotcom-dns](./namedotcom-dns) : Manage DNS records via name.com API. e.g. - `./namedotcom-dns.sh dyndns datacenter1.sites example.com`
 - [erasure-calc](./erasure-calc) : Rule of thumb for erasure coding parity & hot spares. `./erasure.py -n 16 -s 24000` → 10+4+2hs. Check out [the webUI](./erasure-calc/webUI.html)!
+- [dhcp-client-annotator](./dhcp-client-annotator) : Annotate DHCP clients with human-readable names. Track devices coming/going. `./main.sh watch-diff`
 

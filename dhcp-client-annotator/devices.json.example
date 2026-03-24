@@ -1,0 +1,16 @@
+{
+  "annotations": {
+    "18b4306c56ca": "1st floor Nest (09AA01AC331500FK)",
+    "18b43082d750": "2nd floor Nest (09AA01AC36160SF5)",
+    "cca7c10efc28": "3rd floor Nest (15AA01AF362005KS)",
+    "10da43863b79": "3rd floor AP",
+    "343ea4d71b82": "doorbell",
+    "dc91bf7e4c65": "Kindle black",
+    "9c8c6e79582b": "1st floor TV"
+  },
+  "uninteresting": [
+    "18b4306c56ca",
+    "18b43082d750",
+    "cca7c10efc28"
+  ]
+}
