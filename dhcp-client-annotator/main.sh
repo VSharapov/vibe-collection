@@ -37,7 +37,7 @@ fetch-leases() {
   for i in {0..9}; do
     result=$(get-leases-cmd || true)
     [[ -n "$result" ]] && { echo "$result"; return; }
-    sleep 0.1
+    [[ "${DEBUG:-}" == "true" ]] && echo "$i" >> "/tmp/$(basename "$0").retry.log"
   done
   # Perhaps it is truly empty...
 }
