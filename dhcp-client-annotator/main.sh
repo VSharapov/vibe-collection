@@ -20,6 +20,10 @@ normalize-mac() {
   tr '[:upper:]' '[:lower:]' | tr -d ':'
 }
 
+strip-hostname() {
+  cut -c1-36,68-  # keep MAC+IP+annotation, skip hostname (unreliable)
+}
+
 annotate() {
   local mac
   mac=$(echo "$1" | normalize-mac)
@@ -99,12 +103,12 @@ watch-diff() {
   elif [[ -f "$fb" ]]; then
     old="$fb"; new="$fa"
   else
-    all-interesting > "$fa"
+    all-interesting | strip-hostname > "$fa"
     old="$fa"; new="$fb"
   fi
   while true; do
     sleep "$interval"
-    all-interesting > "$new"
+    all-interesting | strip-hostname > "$new"
     diff "$old" "$new" || date --rfc-3339=s
     tmp="$old"; old="$new"; new="$tmp"
   done
