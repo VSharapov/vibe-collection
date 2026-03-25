@@ -33,7 +33,13 @@ is-uninteresting() {
 }
 
 fetch-leases() {
-  get-leases-cmd
+  local result
+  for i in {0..9}; do
+    result=$(get-leases-cmd || true)
+    [[ -n "$result" ]] && { echo "$result"; return; }
+    sleep 0.1
+  done
+  # Perhaps it is truly empty...
 }
 
 show-leases() {
