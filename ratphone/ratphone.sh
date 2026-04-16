@@ -25,6 +25,12 @@ usb-await() { until usb-check; do sleep 2; done; }
 
 wifi-init() { adb tcpip "$(config get ADB_PORT)"; }
 
+wifi-connect() { adb connect "$(config get PHONE_HOSTNAME):$(config get ADB_PORT)"; }
+
+wifi-check() { adb devices | grep -q "$(config get PHONE_HOSTNAME).*device$"; }
+
+wifi-await() { until wifi-check; do wifi-connect; sleep 2; done; }
+
 test() {
   apt-update-if-stale() {
     local cache=/var/cache/apt/pkgcache.bin max_age=$((10 * 24 * 3600))
@@ -60,6 +66,10 @@ test() {
     
     wifi-init
     echo "wifi adb enabled, you may unplug"
+    
+    echo "waiting for wifi connection..."
+    wifi-await
+    echo "phone connected via wifi adb"
   }
   entrypoint() {
     select opt in "test 2" "bash"; do
@@ -82,6 +92,9 @@ Commands:
   usb-check         exit 0 if phone on usb
   usb-await         block until phone on usb
   wifi-init         enable wifi adb (adb tcpip)
+  wifi-connect      adb connect to phone over wifi
+  wifi-check        exit 0 if phone on wifi adb
+  wifi-await        block until wifi adb connected
   test              docker test harness (1=run, 2=in-docker)
 EOF
 }
