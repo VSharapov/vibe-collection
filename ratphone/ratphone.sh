@@ -15,7 +15,11 @@ config() {
   "$@"
 }
 
-usage() { >&2 echo "Usage: ratphone.sh <config> [args...]"; }
+show-fingerprint() {
+  awk '{print $1}' <(adb pubkey ~/.android/adbkey) | openssl base64 -A -d | openssl md5 -c | awk '{print $2}' | tr '[:lower:]' '[:upper:]'
+}
+
+usage() { >&2 echo "Usage: ratphone.sh <config|show-fingerprint> [args...]"; }
 
 [[ $# -eq 0 ]] && { usage; exit 1; }
 "$@"
