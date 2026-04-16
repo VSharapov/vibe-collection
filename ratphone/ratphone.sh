@@ -19,7 +19,35 @@ show-fingerprint() {
   awk '{print $1}' <(adb pubkey ~/.android/adbkey) | openssl base64 -A -d | openssl md5 -c | awk '{print $2}' | tr '[:lower:]' '[:upper:]'
 }
 
-usage() { >&2 echo "Usage: ratphone.sh <config|show-fingerprint> [args...]"; }
+test() {
+  apt-update-if-stale() {
+    local cache=/var/cache/apt/pkgcache.bin max_age=$((10 * 24 * 3600))
+    [[ -f "$cache" && $(($(date +%s) - $(stat -c %Y "$cache"))) -lt $max_age ]] && return
+    apt update
+  }
+  1() {
+    docker build -t ratphone-test "$SCRIPT_DIR"
+    docker run -it --rm --privileged -v "$SCRIPT_DIR":/root ratphone-test bash
+  }
+  2() {
+    apt-update-if-stale
+    apt install -y android-tools-adb jq openssl moreutils less
+    adb start-server
+    echo "=== e2e tests ==="
+    config get
+  }
+  "$@"
+}
+
+usage() { >&2 cat <<'EOF'
+Usage: ratphone.sh <command> [args...]
+
+Commands:
+  config            get/set config values
+  show-fingerprint  display adb pubkey fingerprint
+  test              docker test harness (1=run, 2=in-docker)
+EOF
+}
 
 [[ $# -eq 0 ]] && { usage; exit 1; }
 "$@"
