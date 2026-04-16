@@ -42,6 +42,7 @@ test() {
     local workdir=/tmp/ratphone-docker-test-harness
     mkdir -p "$workdir"
     docker run -it --rm --privileged \
+      -p 5900:5900 \
       -v /dev/bus/usb:/dev/bus/usb \
       -v "$SCRIPT_DIR":/opt/ratphone \
       -v "$workdir":/root \
@@ -50,7 +51,7 @@ test() {
   }
   2() {
     apt-update-if-stale
-    apt install -y android-tools-adb jq openssl moreutils less
+    DEBIAN_FRONTEND=noninteractive apt install -y android-tools-adb jq openssl moreutils less scrcpy
     adb start-server
     echo "=== e2e tests ==="
     
