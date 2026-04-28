@@ -2,14 +2,28 @@
 
 Remote tech support for grandfather's phone via scrcpy over wifi ADB.
 
-## Components (on trash laptop at grandpa's house)
+## Status
+
+| Component | Status |
+|-----------|--------|
+| ratphone.sh dispatch | ✅ Done |
+| USB detection (usb-await) | ✅ Done |
+| WiFi ADB (wifi-init, wifi-await) | ✅ Done |
+| scrcpy with reconnect | ✅ Done |
+| noVNC web UI | ✅ Done |
+| Reverse tunnel | ❌ TODO |
+| Systemd units | ❌ TODO |
+
+## Architecture
 
 ```
 ratphone.sh         # dispatch script, all plumbing exposed
-autoadb             # poll/udev: init wifi adb when USB appears
-scrcpy-daemon       # systemd service, reconnects to phone:5555
-autossh             # reverse tunnel laptop:8080 → server:XXXXX
-guacamole/noVNC     # web wrapper for scrcpy window
+├── usb-await       # block until phone on USB
+├── wifi-init       # adb tcpip 5555
+├── wifi-await      # block until wifi adb connected
+├── scrcpy-start    # scrcpy with reconnect loop
+├── novnc-start     # web UI on port 6080
+└── test            # docker harness
 ```
 
 ## Flow
@@ -19,30 +33,41 @@ guacamole/noVNC     # web wrapper for scrcpy window
     ↓
 [grandpa plugs USB for 30s]  ← only manual step
     ↓
-autoadb detects USB, runs: adb tcpip 5555
+usb-await detects, wifi-init runs: adb tcpip 5555
     ↓
 [grandpa unplugs]
     ↓
-scrcpy connects to phone:5555 over wifi
+wifi-await → scrcpy-start connects over wifi
     ↓
-autossh keeps tunnel alive → you hit https://server/guac
+novnc-start → http://localhost:6080/vnc.html
+    ↓
+[TODO: autossh tunnel → https://server/ratphone]
     ↓
 [you see phone, tap around]
 ```
 
-## What needs building
+## What's implemented
 
-1. `autoadb` — udev rule or polling loop; on USB attach → `adb tcpip 5555` → `adb connect $IP:5555`
-2. scrcpy systemd unit — restarts on failure, connects wifi ADB
-3. reverse tunnel — `autossh -R 8080:localhost:8080 server`
-4. web exposure — guacamole VNC→scrcpy window, or noVNC, or scrcpy's `--web` (if exists)
+1. ✅ `usb-await` — polls until phone on USB
+2. ✅ `wifi-init` — `adb tcpip 5555`
+3. ✅ `wifi-await` — polls until wifi adb connected
+4. ✅ `scrcpy-start` — reconnect loop, `--no-audio`
+5. ✅ `novnc-start` — web VNC on port 6080
+6. ✅ Docker test harness with scrcpy 3.3.4
+
+## What's left
+
+1. ❌ Reverse tunnel — `autossh -R 6080:localhost:6080 server`
+2. ❌ Systemd units for production
+3. ❌ noVNC authentication
 
 ## Trust setup (one-time)
 
 - Plug phone, accept fingerprint prompt, check "always trust"
+- `./ratphone.sh show-fingerprint` to verify
 
 ## Resources
 
 - Trash tier laptop running Debian server (lives at grandpa's)
 - Server with public IPv4 (reverse ssh tunnel target)
-- Pixel 7 phone (trusts laptop's ADB fingerprint)
+- Pixel 7 phone, Android 16 (trusts laptop's ADB fingerprint)

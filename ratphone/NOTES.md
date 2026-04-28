@@ -1,54 +1,59 @@
 # Notes
 
-## Working
+## Current State (2026-04-15)
 
+All core functionality implemented and tested:
 - `wifi-await` connects to phone over wifi adb
-- `adb -s Natanz-Enrichment-Computer:5555 shell echo ok` works
-- Xvfb + x11vnc + scrcpy 3.3.4 works!
-- VNC on localhost:5900 shows phone screen
+- `scrcpy-start` with automatic reconnect loop
+- `novnc-start` for web-based access (no VNC client needed)
+- Dockerfile downloads scrcpy 3.3.4 from GitHub
 
 ## Critical: scrcpy version
 
 - Ubuntu package scrcpy 1.25 is **too old** for Android 16
 - Need **scrcpy 3.3.4+** for Android 16 compatibility
-- Must download from GitHub releases, not apt
+- Dockerfile now downloads from GitHub releases
 
-```bash
-curl -sL https://github.com/Genymobile/scrcpy/releases/download/v3.3.4/scrcpy-linux-x86_64-v3.3.4.tar.gz | tar xz
-```
-
-## Container quirks
+## Container setup
 
 - `DEBIAN_FRONTEND=noninteractive` to avoid tzdata prompt
-- `-p 5900:5900` for VNC access
+- Port 5900: VNC (x11vnc)
+- Port 6080: noVNC web UI
 - `--no-audio` required (no audio device in container)
-- Need curl to download scrcpy (not in base image)
+- scrcpy installed to `/opt/scrcpy-linux-x86_64-v3.3.4/`
 
-## Full working workflow
+## Implemented Commands
 
 ```bash
-# in container
-Xvfb :99 -screen 0 1280x720x24 &
-x11vnc -display :99 -forever -nopw -bg
-./ratphone.sh wifi-await
-DISPLAY=:99 ./scrcpy-linux-x86_64-v3.3.4/scrcpy -s Natanz-Enrichment-Computer:5555 --no-audio &
-# then VNC to localhost:5900
+# Config
+./ratphone.sh config get              # show all
+./ratphone.sh config get KEY          # get one
+./ratphone.sh config set KEY VAL      # set
+
+# USB workflow
+./ratphone.sh usb-check               # is phone on USB?
+./ratphone.sh usb-await               # block until USB
+
+# WiFi workflow  
+./ratphone.sh wifi-init               # adb tcpip
+./ratphone.sh wifi-connect            # adb connect
+./ratphone.sh wifi-check              # is wifi adb up?
+./ratphone.sh wifi-await              # block until wifi
+
+# Display
+./ratphone.sh xvfb-start              # virtual framebuffer
+./ratphone.sh vnc-start               # xvfb + x11vnc
+./ratphone.sh novnc-start             # + novnc web (port 6080)
+./ratphone.sh scrcpy-start            # scrcpy with reconnect
+
+# Testing
+./ratphone.sh test 1                  # docker container
+./ratphone.sh test 2                  # e2e inside container
 ```
 
 ## TODO
 
-- [ ] Download scrcpy 3.3.4 in Dockerfile (not apt scrcpy)
-- [ ] Add curl to Dockerfile
-- [ ] Create `scrcpy-start` command (Xvfb + x11vnc + scrcpy)
-- [ ] Create `vnc-start` command
-- [ ] Consider noVNC for web access (no VNC client needed)
-- [ ] Handle scrcpy reconnect on disconnect
-- [ ] Reverse tunnel for remote access
-
-## Commands
-
-```bash
-./ratphone.sh wifi-await          # connect to phone
-./ratphone.sh config get          # show config
-./ratphone.sh show-fingerprint    # for trust setup
-```
+- [ ] Reverse tunnel (autossh to public server)
+- [ ] Systemd units for trash laptop deployment
+- [ ] noVNC authentication
+- [ ] Phone reboot detection

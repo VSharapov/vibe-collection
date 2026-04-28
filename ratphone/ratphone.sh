@@ -31,6 +31,36 @@ wifi-check() { adb devices | grep -q "$(config get PHONE_HOSTNAME).*device$"; }
 
 wifi-await() { until wifi-check; do wifi-connect; sleep 2; done; }
 
+xvfb-start() {
+  pgrep -x Xvfb >/dev/null && return
+  Xvfb :99 -screen 0 1280x720x24 &
+  sleep 1
+}
+
+vnc-start() {
+  xvfb-start
+  pgrep -x x11vnc >/dev/null && return
+  x11vnc -display :99 -forever -nopw -bg
+}
+
+novnc-start() {
+  vnc-start
+  pgrep -f websockify >/dev/null && return
+  /usr/share/novnc/utils/novnc_proxy --listen 6080 --vnc localhost:5900 &
+}
+
+scrcpy-start() {
+  local target="$(config get PHONE_HOSTNAME):$(config get ADB_PORT)"
+  xvfb-start
+  while true; do
+    wifi-await
+    echo "starting scrcpy..."
+    DISPLAY=:99 scrcpy -s "$target" --no-audio || true
+    echo "scrcpy exited, reconnecting in 3s..."
+    sleep 3
+  done
+}
+
 test() {
   apt-update-if-stale() {
     local cache=/var/cache/apt/pkgcache.bin max_age=$((10 * 24 * 3600))
@@ -42,7 +72,7 @@ test() {
     local workdir=/tmp/ratphone-docker-test-harness
     mkdir -p "$workdir"
     docker run -it --rm --privileged \
-      -p 5900:5900 \
+      -p 5900:5900 -p 6080:6080 \
       -v /dev/bus/usb:/dev/bus/usb \
       -v "$SCRIPT_DIR":/opt/ratphone \
       -v "$workdir":/root \
@@ -51,7 +81,7 @@ test() {
   }
   2() {
     apt-update-if-stale
-    DEBIAN_FRONTEND=noninteractive apt install -y android-tools-adb jq openssl moreutils less scrcpy
+    DEBIAN_FRONTEND=noninteractive apt install -y android-tools-adb jq openssl moreutils less
     adb start-server
     echo "=== e2e tests ==="
     
@@ -71,6 +101,12 @@ test() {
     echo "waiting for wifi connection..."
     wifi-await
     echo "phone connected via wifi adb"
+    
+    echo "starting novnc + scrcpy..."
+    novnc-start
+    scrcpy-start &
+    echo "open http://localhost:6080/vnc.html"
+    wait
   }
   entrypoint() {
     select opt in "test 2" "bash"; do
@@ -96,6 +132,10 @@ Commands:
   wifi-connect      adb connect to phone over wifi
   wifi-check        exit 0 if phone on wifi adb
   wifi-await        block until wifi adb connected
+  xvfb-start        start virtual framebuffer
+  vnc-start         start xvfb + x11vnc
+  novnc-start       start xvfb + x11vnc + novnc (web)
+  scrcpy-start      start scrcpy with reconnect loop
   test              docker test harness (1=run, 2=in-docker)
 EOF
 }
