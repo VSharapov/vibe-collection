@@ -33,7 +33,7 @@ wifi-await() { until wifi-check; do wifi-connect; sleep 2; done; }
 
 xvfb-start() {
   pgrep -x Xvfb >/dev/null && return
-  Xvfb :99 -screen 0 1280x720x24 &
+  Xvfb :99 -screen 0 720x1280x24 &
   sleep 1
 }
 
