@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<meta charset="utf-8">
+<title>Terbinafine Liver Stress Simulation</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #181b22;
+    --panel2: #20242d;
+    --ink: #e6e8ec;
+    --muted: #8b93a3;
+    --accent: #5ab8ff;
+    --warn: #f4c25a;
+    --hi: #f08a5d;
+    --crit: #e25555;
+    --ok: #6dd58c;
+    --grid: #2a2f3a;
+    --alt: #5ab8ff;
+    --ast: #c08af0;
+    --alp: #6dd58c;
+    --bili: #f4c25a;
+    --alb: #e25555;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+    font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 18px 18px 60px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  h2 { font-size: 12px; margin: 14px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+  .disclaimer {
+    background: #2a1f1f; color: #f6c5c5; border: 1px solid #5a2a2a;
+    padding: 8px 10px; border-radius: 6px; font-size: 12px; margin: 8px 0 14px;
+  }
+  .grid { display: grid; grid-template-columns: 380px 1fr; gap: 16px; }
+  @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid #262a33; border-radius: 8px; padding: 12px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  label { color: var(--muted); font-size: 12px; }
+  input[type=number], input[type=text], select {
+    background: var(--panel2); color: var(--ink); border: 1px solid #2d323d;
+    border-radius: 4px; padding: 4px 6px; width: 76px; font: inherit;
+    transition: background-color .2s, border-color .2s;
+  }
+  select { width: auto; }
+  /* subtle highlight for fields the user has not touched yet */
+  input.pristine, select.pristine {
+    background-color: #1c2531;
+    border-color: #2d4866;
+    box-shadow: inset 0 0 0 1px rgba(90,184,255,0.08);
+  }
+  button {
+    background: var(--panel2); color: var(--ink); border: 1px solid #2d323d;
+    border-radius: 4px; padding: 5px 10px; cursor: pointer; font: inherit;
+  }
+  button:hover { background: #2a3140; }
+  button.primary { background: #1f3a55; border-color: #2c5680; }
+  button.danger { background: #3a1f1f; border-color: #6a2c2c; }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+  canvas { width: 100%; display: block; background: var(--panel2); border-radius: 6px; }
+  #chart { height: 360px; }
+  #chartBili { height: 140px; margin-top: 8px; }
+  .log {
+    background: var(--panel2); border-radius: 6px; padding: 8px; margin-top: 10px;
+    max-height: 240px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+  }
+  .log .d { color: var(--muted); }
+  .log .ok { color: var(--ok); }
+  .log .warn { color: var(--warn); }
+  .log .hi { color: var(--hi); }
+  .log .crit { color: var(--crit); }
+  table.events { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.events th, table.events td { padding: 4px 6px; text-align: left; border-bottom: 1px solid #262a33; }
+  table.events th { color: var(--muted); font-weight: normal; }
+  table.events button { padding: 2px 6px; font-size: 11px; }
+  table.labs { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.labs th, table.labs td { padding: 4px 6px; text-align: left; border-bottom: 1px solid #262a33; }
+  table.labs th { color: var(--muted); font-weight: normal; }
+  table.labs td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  details { margin-top: 8px; }
+  summary { cursor: pointer; color: var(--muted); }
+  .footer { color: var(--muted); margin-top: 16px; font-size: 11px; }
+  dl.glossary {
+    display: grid; grid-template-columns: minmax(160px, 220px) 1fr;
+    gap: 4px 12px; margin: 6px 0 0; font-size: 12px;
+  }
+  dl.glossary dt { color: var(--ink); font-weight: 600; }
+  dl.glossary dd { color: var(--muted); margin: 0; }
+  @media (max-width: 700px) {
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dd { margin: 0 0 4px 0; }
+  }
+  .grade-ok { color: var(--ok); }
+  .grade-mild { color: var(--warn); }
+  .grade-mod { color: var(--hi); }
+  .grade-sev { color: var(--crit); }
+  .tip { color: var(--muted); font-size: 11px; margin-top: 4px; }
+</style>
+</head>
+<body class="vsc-initialized">
+<div class="wrap">
+  <h1>Terbinafine 250 mg Daily — Multi-Lab Liver Simulator</h1>
+  <div class="sub">Healthy male, 37 y/o, ~200 lb. Baselines initialized from your actual labs. Days 1–200.</div>
+  <div class="disclaimer">
+    <b>Not medical advice.</b> Toy compartmental model. Real terbinafine hepatotoxicity is idiosyncratic.
+    Sensitivities are eyeballed estimates; Hy's-Law style bilirubin coupling is illustrative only.
+  </div>
+  <div class="tip">Subtly highlighted fields are still at defaults — the highlight disappears once you edit them.</div>
+
+  <div class="grid">
+    <div>
+      <div class="panel">
+        <h2 style="margin-top:0">Your baseline labs</h2>
+        <table class="labs" id="baselineTable">
+          <thead><tr><th>Lab</th><th>Value</th><th>Normal</th></tr></thead>
+          <tbody>
+            <tr><td>ALT (SGPT)</td><td class="num"><input id="b_alt" type="number" step="0.1" value="30" class="pristine"></td><td>10–50 U/L</td></tr>
+            <tr><td>AST (SGOT)</td><td class="num"><input id="b_ast" type="number" step="0.1" value="22" class="pristine"></td><td>10–50 U/L</td></tr>
+            <tr><td>ALP</td><td class="num"><input id="b_alp" type="number" step="0.1" value="60" class="pristine"></td><td>40–129 U/L</td></tr>
+            <tr><td>Bilirubin total</td><td class="num"><input id="b_bili" type="number" step="0.01" value="0.3" class="pristine"></td><td>0.2–1.2 mg/dL</td></tr>
+            <tr><td>Bilirubin direct</td><td class="num"><input id="b_dbili" type="number" step="0.01" value="0.1" class="pristine"></td><td>0.08–0.60 mg/dL</td></tr>
+            <tr><td>Albumin</td><td class="num"><input id="b_alb" type="number" step="0.01" value="4.8" class="pristine"></td><td>3.5–5.2 g/dL</td></tr>
+            <tr><td>Total protein</td><td class="num"><input id="b_tp" type="number" step="0.01" value="7.1" class="pristine"></td><td>6.0–8.7 g/dL</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Regimen</h2>
+        <div class="row">
+          <label>Terbinafine start day</label>
+          <input id="terbStart" type="number" min="1" max="200" value="1" class="pristine">
+          <label>End day</label>
+          <input id="terbEnd" type="number" min="1" max="200" value="90" class="pristine">
+        </div>
+        <div class="row">
+          <label>Dose (mg/day)</label>
+          <input id="terbDose" type="number" min="0" max="2000" step="5" value="250" class="pristine">
+          <label>Terb daily insult (ALT-units)</label>
+          <input id="terbInsult" type="number" min="0" max="10" step="0.01" value="1.20" class="pristine">
+        </div>
+        <div class="tip">Dose &amp; insult are linked: insult = sensitivity × dose. Edit either; the other rescales. Sensitivity: <span id="senseRead">0.00480</span> /mg.</div>
+        <div class="row">
+          <label>Cumulative factor</label>
+          <input id="terbCum" type="number" min="0" max="0.1" step="0.001" value="0.010" class="pristine">
+        </div>
+        <div class="row">
+          <label>Alcohol /drink</label>
+          <input id="alcInsult" type="number" min="0" max="20" step="0.1" value="3.0" class="pristine">
+          <label>Ibuprofen /200mg</label>
+          <input id="ibuInsult" type="number" min="0" max="20" step="0.1" value="1.5" class="pristine">
+        </div>
+        <div class="row">
+          <label>Terb × alcohol synergy</label>
+          <input id="synergy" type="number" min="0" max="2" step="0.05" value="0.5" class="pristine">
+          <label>Recovery /day</label>
+          <input id="recovery" type="number" min="0.01" max="1" step="0.01" value="0.18" class="pristine">
+        </div>
+
+        <h2>Add event</h2>
+        <div class="row">
+          <label>Day</label>
+          <input id="evDay" type="number" min="1" max="200" value="95" class="">
+          <label>Type</label>
+          <select id="evType" class="pristine">
+            <option value="alcohol" selected="selected">Alcoholic drink</option>
+            <option value="ibuprofen">Ibuprofen 200 mg</option>
+          </select>
+          <label>Count</label>
+          <input id="evCount" type="number" min="1" max="20" value="1" class="pristine">
+          <button class="primary" id="addEv">Add</button>
+        </div>
+        <div class="row" style="gap:6px;">
+          <button id="presetWeekend">+Weekend drinks (2/Fri, 3/Sat ×12 wks)</button>
+        </div>
+        <div class="row" style="gap:6px;">
+          <button id="presetIbu">+Ibuprofen 1×/day, days 30–45</button>
+          <button class="danger" id="clearEv">Clear all events</button>
+        </div>
+
+        <h2>Events</h2>
+        <div style="max-height:200px;overflow:auto;">
+          <table class="events" id="evTable">
+            <thead><tr><th>Day</th><th>Type</th><th>Count</th><th></th></tr></thead>
+            <tbody><tr><td>95</td><td>Alcohol</td><td>24</td><td><button data-d="95" data-t="alcohol">×</button></td></tr></tbody>
+          </table>
+        </div>
+
+        <h2>Peak values &amp; DILI grade</h2>
+        <table class="labs" id="peakTable">
+          <thead><tr><th>Lab</th><th class="num">Peak</th><th>Day</th><th>Grade</th></tr></thead>
+          <tbody><tr><td>ALT</td><td class="num">106.6</td><td>95</td><td class="grade-mild">mild (2.1×)</td></tr><tr><td>AST</td><td class="num">119.0</td><td>95</td><td class="grade-mild">mild (2.4×)</td></tr><tr><td>ALP</td><td class="num">82.7</td><td>95</td><td class="grade-ok">normal</td></tr><tr><td>Bilirubin total</td><td class="num">0.30</td><td>1</td><td class="grade-ok">normal</td></tr><tr><td>Albumin (nadir)</td><td class="num">4.78</td><td>122</td><td class="grade-ok">normal</td></tr></tbody>
+        </table>
+
+        <details>
+          <summary>Model notes</summary>
+          <div style="margin-top:6px;color:var(--muted);font-size:12px;">
+            Each lab L evolves as: L[d] = L[d-1] − rec<sub>L</sub>(L[d-1] − baseline<sub>L</sub>)
+            + k<sub>L,terb</sub>·terb(d)·(1 + cum·daysOnTerb)
+            + k<sub>L,alc</sub>·drinks(d) + k<sub>L,ibu</sub>·ibu(d)
+            + k<sub>L,syn</sub>·(terb·drinks).
+            Bilirubin couples to chronic ALT excess (Hy's-law-ish). 
+Albumin sags only under sustained injury (28-day trailing).
+            Sensitivities (k): ALT=ref, AST relatively more 
+alcohol-sensitive, ALP slow + cumulative (cholestatic), bilirubin gated 
+by ALT excess.
+            Units arbitrary but scaled to look like clinical U/L &amp; 
+mg/dL.
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <canvas id="chart" width="782" height="360"></canvas>
+        <div class="legend">
+          <span><span class="sw" style="background:var(--alt)"></span>ALT (U/L)</span>
+          <span><span class="sw" style="background:var(--ast)"></span>AST (U/L)</span>
+          <span><span class="sw" style="background:var(--alp)"></span>ALP (U/L)</span>
+          <span><span class="sw" style="background:rgba(192,138,240,0.25)"></span>Terbinafine window</span>
+          <span><span class="sw" style="background:var(--warn)"></span>Alcohol day</span>
+          <span><span class="sw" style="background:var(--accent)"></span>Ibuprofen day</span>
+        </div>
+        <canvas id="chartBili" width="782" height="140"></canvas>
+        <div class="legend">
+          <span><span class="sw" style="background:var(--bili)"></span>Bilirubin total (mg/dL)</span>
+          <span><span class="sw" style="background:var(--alb)"></span>Albumin (g/dL)</span>
+        </div>
+
+        <h2>Day log (notable days)</h2>
+        <div class="log" id="log"><div><span class="d">d  1</span> <span class="ok">ALT  31 AST  23 ALP  61 Bili 0.30</span> terbinafine start</div><div><span class="d">d 90</span> <span class="ok">ALT  42 AST  30 ALP  75 Bili 0.30</span> terbinafine end</div><div><span class="d">d 95</span> <span class="ok">ALT 107 AST 119 ALP  83 Bili 0.30</span> 24 drinks</div></div>
+
+        <h2>Glossary</h2>
+        <dl class="glossary">
+          <dt>Terbinafine</dt><dd>Oral antifungal (brand: Lamisil); used for nail and skin fungal infections; rare but serious liver risk.</dd>
+          <dt>Hepatotoxicity</dt><dd>Drug-induced liver injury (DILI). Damage to liver cells caused by a medication or toxin.</dd>
+          <dt>Idiosyncratic</dt><dd>Unpredictable, host-specific reaction not strictly tied to dose. Most terbinafine liver injury is idiosyncratic.</dd>
+          <dt>Hepatocellular pattern</dt><dd>Injury dominated by ALT/AST rise (hepatocyte damage), as opposed to cholestatic.</dd>
+          <dt>Cholestatic pattern</dt><dd>Injury dominated by ALP and bilirubin rise; reflects impaired bile flow. Terbinafine often mixed/cholestatic.</dd>
+          <dt>ALT (SGPT)</dt><dd>Alanine aminotransferase. Enzyme released when hepatocytes are damaged. Most specific common liver marker.</dd>
+          <dt>AST (SGOT)</dt><dd>Aspartate aminotransferase. Hepatocyte enzyme but also in muscle/heart; rises with liver or muscle injury.</dd>
+          <dt>ALP</dt><dd>Alkaline phosphatase. Rises with bile-duct injury or bone turnover. Marker of cholestatic liver injury.</dd>
+          <dt>Bilirubin (total)</dt><dd>Yellow pigment from heme breakdown; cleared by liver. High levels cause jaundice.</dd>
+          <dt>Bilirubin (direct/conjugated)</dt><dd>Fraction processed by the liver. Elevation suggests excretion problem (cholestasis, hepatocyte injury).</dd>
+          <dt>Albumin</dt><dd>Main blood protein made by the liver. Drops with chronic liver dysfunction (long half-life ~20 days).</dd>
+          <dt>Total protein</dt><dd>Sum of albumin and globulins; gives a coarse view of synthetic and immune protein status.</dd>
+          <dt>ULN / LLN</dt><dd>Upper / Lower Limit of Normal for a lab's reference range.</dd>
+          <dt>U/L, mg/dL, g/dL</dt><dd>Units per liter; milligrams or grams per deciliter (100 mL). Standard clinical lab units.</dd>
+          <dt>DILI</dt><dd>Drug-Induced Liver Injury. Umbrella term for any liver damage caused by drugs.</dd>
+          <dt>Hy's Law</dt><dd>Rule: ALT &gt;3×ULN plus bilirubin &gt;2×ULN without obstruction predicts ~10% mortality risk.</dd>
+          <dt>R-value</dt><dd>(ALT/ULN) ÷ (ALP/ULN). &gt;5 hepatocellular, &lt;2 cholestatic, in between mixed.</dd>
+          <dt>NSAID</dt><dd>Non-Steroidal Anti-Inflammatory Drug (ibuprofen, naproxen, etc.). Mild hepatic and renal effects with chronic use.</dd>
+          <dt>Synergy (drug interaction)</dt><dd>Combined effect greater than additive. Modeled here for terbinafine + alcohol on hepatocyte stress.</dd>
+          <dt>Cumulative factor</dt><dd>Model term: per-day terbinafine insult grows slowly with days-on-drug (proxy for tolerance loss / metabolite buildup).</dd>
+        </dl>
+
+        <h2>Thresholds — what crossing them means</h2>
+        <dl class="glossary">
+          <dt>ALT or AST above ULN (50 U/L)</dt><dd>Mild "transaminitis." Common &amp; often transient with terbinafine (reported ~3% on therapy). Usually monitored, not stopped.</dd>
+          <dt>ALT &gt; 3× ULN (150 U/L)</dt><dd>Standard threshold for "clinically significant" elevation. Repeat labs; consider stopping the drug; look for symptoms.</dd>
+          <dt>ALT &gt; 5× ULN (250 U/L)</dt><dd>Moderate hepatocellular injury. Most guidelines: stop the offending drug. Recheck labs in a few days.</dd>
+          <dt>ALT &gt; 10× ULN (500 U/L)</dt><dd>Severe injury. Stop drug, evaluate urgently, rule out other causes (viral, autoimmune, ischemic).</dd>
+          <dt>ALT &gt; 20× ULN (1000+ U/L)</dt><dd>Massive hepatocyte necrosis. ER-level. Concern for fulminant liver failure depending on synthetic function.</dd>
+          <dt>ALP &gt; 2× ULN (~258 U/L)</dt><dd>Significant cholestasis. Common in mixed/cholestatic terbinafine injury, can outlast ALT rises by weeks.</dd>
+          <dt>Total bilirubin &gt; ULN (1.2 mg/dL)</dt><dd>Beginning of hyperbilirubinemia. Subclinical jaundice typically appears around 2–3 mg/dL (scleral icterus).</dd>
+          <dt>Total bilirubin &gt; 2× ULN with ALT &gt; 3× ULN</dt><dd>Hy's Law positive. Strong predictor of serious DILI; mandatory drug stop and workup.</dd>
+          <dt>Albumin &lt; 3.5 g/dL</dt><dd>Mild hypoalbuminemia. Many causes (inflammation, nutrition, kidney). With liver injury, suggests reduced synthetic function.</dd>
+          <dt>Albumin &lt; 3.0 g/dL</dt><dd>Moderate. In sustained liver injury suggests subacute/chronic dysfunction. Slow lab — weeks-scale lag.</dd>
+          <dt>Albumin &lt; 2.5 g/dL</dt><dd>Severe. Concerning for advanced chronic liver disease or major systemic illness.</dd>
+          <dt>AST &gt; ALT ratio</dt><dd>"AST&gt;ALT" pattern (ratio &gt; ~1.5–2) classically suggests alcohol-related injury or advanced fibrosis/cirrhosis.</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Single-file HTML. No network access required.
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const DAYS = 200;
+
+// upper limits of normal (from the lab report)
+const ULN = { alt: 50, ast: 50, alp: 129, bili: 1.2, dbili: 0.60 };
+// lower limit for albumin (drop-side)
+const LLN_alb = 3.5;
+
+// DILI severity grading (CTCAE-style for hepatocellular labs vs ULN multiples)
+const GRADES = [
+  { name: 'normal',   mult: 1.0,  cls: 'grade-ok',    color: '#6dd58c' },
+  { name: 'mild',     mult: 3.0,  cls: 'grade-mild',  color: '#f4c25a' },
+  { name: 'moderate', mult: 5.0,  cls: 'grade-mod',   color: '#f08a5d' },
+  { name: 'severe',   mult: 20.0, cls: 'grade-sev',   color: '#e25555' },
+];
+
+function gradeOf(value, uln) {
+  const r = value / uln;
+  if (r >= 20) return 3;
+  if (r >= 5)  return 2;
+  if (r >= 3)  return 1;
+  if (r >= 1)  return 0; // > ULN but < mild threshold; treat as borderline (still "normal-ish")
+  return -1;
+}
+
+// per-lab sensitivities to insults; ALT is the reference (1.0)
+const K = {
+  alt: { terb: 1.0, alc: 1.0, ibu: 1.0, syn: 1.0, rec: 1.0, cum: 1.0 },
+  ast: { terb: 0.7, alc: 1.3, ibu: 0.5, syn: 0.9, rec: 0.9, cum: 0.7 },
+  alp: { terb: 0.5, alc: 0.2, ibu: 0.2, syn: 0.3, rec: 0.6, cum: 2.0 }, // slow + cumulative (cholestatic)
+};
+
+const $ = id => document.getElementById(id);
+const events = {};
+function ensureDay(d) { if (!events[d]) events[d] = { alcohol: 0, ibuprofen: 0 }; return events[d]; }
+
+function addEvent(day, type, count) {
+  if (!Number.isFinite(day) || day < 1 || day > DAYS) return;
+  if (!['alcohol','ibuprofen'].includes(type)) return;
+  const c = Math.max(0, Math.floor(count));
+  if (c === 0) return;
+  ensureDay(day)[type] += c;
+  renderEvents(); simulate();
+}
+function removeEvent(day, type) {
+  if (events[day]) {
+    delete events[day][type];
+    if (!events[day].alcohol && !events[day].ibuprofen) delete events[day];
+  }
+  renderEvents(); simulate();
+}
+function clearEvents() {
+  for (const k of Object.keys(events)) delete events[k];
+  renderEvents(); simulate();
+}
+function renderEvents() {
+  const tb = $('evTable').querySelector('tbody');
+  tb.innerHTML = '';
+  const days = Object.keys(events).map(Number).sort((a,b)=>a-b);
+  for (const d of days) {
+    const e = events[d];
+    if (e.alcohol) tb.insertAdjacentHTML('beforeend',
+      `<tr><td>${d}</td><td>Alcohol</td><td>${e.alcohol}</td><td><button data-d="${d}" data-t="alcohol">×</button></td></tr>`);
+    if (e.ibuprofen) tb.insertAdjacentHTML('beforeend',
+      `<tr><td>${d}</td><td>Ibuprofen 200mg</td><td>${e.ibuprofen}</td><td><button data-d="${d}" data-t="ibuprofen">×</button></td></tr>`);
+  }
+  tb.querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', () => removeEvent(+b.dataset.d, b.dataset.t));
+  });
+}
+
+function P() {
+  return {
+    terbStart: +$('terbStart').value,
+    terbEnd:   +$('terbEnd').value,
+    terbInsult:+$('terbInsult').value,
+    terbCum:   +$('terbCum').value,
+    alcInsult: +$('alcInsult').value,
+    ibuInsult: +$('ibuInsult').value,
+    synergy:   +$('synergy').value,
+    recovery:  +$('recovery').value,
+    baseALT:   +$('b_alt').value,
+    baseAST:   +$('b_ast').value,
+    baseALP:   +$('b_alp').value,
+    baseBili:  +$('b_bili').value,
+    baseAlb:   +$('b_alb').value,
+  };
+}
+
+function simulate() {
+  const p = P();
+
+  // series
+  const alt  = new Array(DAYS+1); alt[0]  = p.baseALT;
+  const ast  = new Array(DAYS+1); ast[0]  = p.baseAST;
+  const alp  = new Array(DAYS+1); alp[0]  = p.baseALP;
+  const bili = new Array(DAYS+1); bili[0] = p.baseBili;
+  const alb  = new Array(DAYS+1); alb[0]  = p.baseAlb;
+
+  let daysOnTerb = 0;
+  const log = [];
+
+  // for albumin: trailing 28-day window of (ALT excess over ULN)
+  const win = [];
+  const WIN = 28;
+
+  for (let d = 1; d <= DAYS; d++) {
+    const onTerb = (d >= p.terbStart && d <= p.terbEnd);
+    if (onTerb) daysOnTerb++;
+    const ev = events[d] || { alcohol: 0, ibuprofen: 0 };
+    const dr = ev.alcohol, ib = ev.ibuprofen;
+    const cumMult = 1 + p.terbCum * daysOnTerb;
+
+    function stepEnzyme(prev, base, k) {
+      let s = prev - p.recovery * k.rec * (prev - base);
+      if (onTerb) s += k.terb * p.terbInsult * (1 + (k.cum * p.terbCum * daysOnTerb));
+      if (dr)     s += k.alc * p.alcInsult * dr + (onTerb ? k.syn * p.synergy * p.alcInsult * dr : 0);
+      if (ib)     s += k.ibu * p.ibuInsult * ib;
+      return s;
+    }
+
+    alt[d] = stepEnzyme(alt[d-1], p.baseALT, K.alt);
+    ast[d] = stepEnzyme(ast[d-1], p.baseAST, K.ast);
+    alp[d] = stepEnzyme(alp[d-1], p.baseALP, K.alp);
+
+    // bilirubin: Hy's-law-ish. Rises when ALT chronically exceeds 3x ULN; slow.
+    const altExcess = Math.max(0, alt[d] - 3 * ULN.alt);
+    const biliTarget = p.baseBili + 0.015 * altExcess; // ~+0.015 mg/dL per U/L over 3xULN at steady state
+    bili[d] = bili[d-1] + 0.08 * (biliTarget - bili[d-1]); // ~12-day TC
+
+    // albumin: drops only with chronic injury (trailing 28-day mean of ALT excess over ULN)
+    win.push(Math.max(0, alt[d] - ULN.alt));
+    if (win.length > WIN) win.shift();
+    const meanExcess = win.reduce((a,b)=>a+b,0) / win.length;
+    const albTarget = p.baseAlb - 0.004 * meanExcess; // -0.004 g/dL per (U/L over ULN) at steady state
+    alb[d] = alb[d-1] + (1/20) * (albTarget - alb[d-1]); // ~20-day TC (albumin half-life)
+
+    // log notable days
+    const notes = [];
+    if (onTerb && d === p.terbStart) notes.push('terbinafine start');
+    if (onTerb && d === p.terbEnd) notes.push('terbinafine end');
+    if (dr) notes.push(`${dr} drink${dr>1?'s':''}`);
+    if (ib) notes.push(`ibuprofen ×${ib}`);
+    const g = Math.max(gradeOf(alt[d], ULN.alt), gradeOf(ast[d], ULN.ast), gradeOf(alp[d], ULN.alp));
+    const cls = g >= 3 ? 'crit' : g === 2 ? 'hi' : g === 1 ? 'warn' : 'ok';
+    if (notes.length || g >= 1) {
+      log.push({ d, alt: alt[d], ast: ast[d], alp: alp[d], bili: bili[d], notes, cls });
+    }
+  }
+
+  drawEnzymes(alt, ast, alp, p);
+  drawBili(bili, alb, p);
+  renderPeak({ alt, ast, alp, bili, alb });
+  renderLog(log);
+}
+
+function renderPeak(s) {
+  function row(name, arr, uln, isDrop) {
+    let peak = isDrop ? Infinity : -Infinity, peakDay = 0;
+    for (let i = 1; i < arr.length; i++) {
+      if (isDrop ? arr[i] < peak : arr[i] > peak) { peak = arr[i]; peakDay = i; }
+    }
+    let gradeLabel, cls;
+    if (isDrop) {
+      const drop = (s.alb[0] - peak);
+      if (peak < 2.5) { gradeLabel = 'severe'; cls = 'grade-sev'; }
+      else if (peak < 3.0) { gradeLabel = 'moderate'; cls = 'grade-mod'; }
+      else if (peak < LLN_alb) { gradeLabel = 'mild low'; cls = 'grade-mild'; }
+      else { gradeLabel = 'normal'; cls = 'grade-ok'; }
+    } else {
+      const r = peak / uln;
+      if (r >= 5)      { gradeLabel = `severe (${r.toFixed(1)}×ULN)`; cls = 'grade-sev'; }
+      else if (r >= 3) { gradeLabel = `moderate (${r.toFixed(1)}×)`; cls = 'grade-mod'; }
+      else if (r >= 1) { gradeLabel = `mild (${r.toFixed(1)}×)`;     cls = 'grade-mild'; }
+      else             { gradeLabel = 'normal';                       cls = 'grade-ok'; }
+    }
+    const fmt = arr === s.bili || arr === s.alb ? peak.toFixed(2) : peak.toFixed(1);
+    return `<tr><td>${name}</td><td class="num">${fmt}</td><td>${peakDay}</td><td class="${cls}">${gradeLabel}</td></tr>`;
+  }
+  $('peakTable').querySelector('tbody').innerHTML =
+    row('ALT', s.alt, ULN.alt, false) +
+    row('AST', s.ast, ULN.ast, false) +
+    row('ALP', s.alp, ULN.alp, false) +
+    row('Bilirubin total', s.bili, ULN.bili, false) +
+    row('Albumin (nadir)', s.alb, null, true);
+}
+
+function renderLog(entries) {
+  const out = entries.slice(-300).map(e =>
+    `<div><span class="d">d${String(e.d).padStart(3,' ')}</span> ` +
+    `<span class="${e.cls}">ALT ${e.alt.toFixed(0).padStart(3,' ')} ` +
+    `AST ${e.ast.toFixed(0).padStart(3,' ')} ` +
+    `ALP ${e.alp.toFixed(0).padStart(3,' ')} ` +
+    `Bili ${e.bili.toFixed(2)}</span> ` +
+    `${e.notes.join(', ')}</div>`
+  ).join('');
+  $('log').innerHTML = out || '<div class="d">no notable days</div>';
+}
+
+// ---------- chart helpers ----------
+function setupCanvas(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth, cssH = canvas.clientHeight;
+  canvas.width = cssW * dpr; canvas.height = cssH * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cssW,cssH);
+  return { ctx, W: cssW, H: cssH };
+}
+
+function drawEnzymes(alt, ast, alp, p) {
+  const c = $('chart'); const { ctx, W, H } = setupCanvas(c);
+  const padL = 44, padR = 14, padT = 12, padB = 28;
+  const pw = W - padL - padR, ph = H - padT - padB;
+  const yMax = Math.max(ULN.alt * 5.5, Math.max(...alt, ...ast, ...alp) * 1.05, 80);
+  const yMin = 0;
+  const xOf = d => padL + (d/DAYS) * pw;
+  const yOf = v => padT + (1 - (v - yMin) / (yMax - yMin)) * ph;
+
+  // terbinafine window
+  ctx.fillStyle = 'rgba(192,138,240,0.10)';
+  ctx.fillRect(xOf(p.terbStart-1), padT, xOf(p.terbEnd) - xOf(p.terbStart-1), ph);
+
+  // event markers
+  for (const d of Object.keys(events)) {
+    const ev = events[d], x = xOf(+d);
+    if (ev.alcohol) {
+      ctx.fillStyle = 'rgba(244,194,90,0.9)';
+      ctx.fillRect(x-1, padT + ph - ev.alcohol*2, 2, ev.alcohol*2);
+    }
+    if (ev.ibuprofen) {
+      ctx.fillStyle = 'rgba(90,184,255,0.9)';
+      ctx.fillRect(x-1, padT, 2, ev.ibuprofen*2);
+    }
+  }
+
+  // grid + y-axis
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.fillStyle = '#8b93a3';
+  ctx.font = '11px ui-sans-serif, system-ui, sans-serif';
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let i = 0; i <= 6; i++) {
+    const v = yMin + (i/6)*(yMax - yMin), y = yOf(v);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL+pw, y); ctx.stroke();
+    ctx.fillText(v.toFixed(0), padL-6, y);
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let d = 0; d <= DAYS; d += 20) {
+    const x = xOf(d);
+    ctx.fillText(String(d), x, padT + ph + 4);
+  }
+
+  // ALT thresholds at ULN, 3x, 5x
+  function dashed(yv, color, label) {
+    if (yv > yMax) return;
+    ctx.save();
+    ctx.setLineDash([4,4]); ctx.strokeStyle = color; ctx.lineWidth = 1;
+    const y = yOf(yv); ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+pw,y); ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = color; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText(label, padL+4, y-2);
+  }
+  dashed(ULN.alt,     '#f4c25a', `ULN ALT/AST (${ULN.alt})`);
+  dashed(ULN.alt*3,   '#f08a5d', `3× ULN (${ULN.alt*3})`);
+  dashed(ULN.alt*5,   '#e25555', `5× ULN (${ULN.alt*5})`);
+  dashed(ULN.alp,     '#6dd58c', `ULN ALP (${ULN.alp})`);
+
+  // lines
+  function plot(arr, color, lw) {
+    ctx.strokeStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath();
+    for (let d = 0; d <= DAYS; d++) {
+      const x = xOf(d), y = yOf(arr[d]);
+      if (d === 0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+  plot(alp, getComputedStyle(document.documentElement).getPropertyValue('--alp').trim(), 1.4);
+  plot(ast, getComputedStyle(document.documentElement).getPropertyValue('--ast').trim(), 1.4);
+  plot(alt, getComputedStyle(document.documentElement).getPropertyValue('--alt').trim(), 2.0);
+}
+
+function drawBili(bili, alb, p) {
+  const c = $('chartBili'); const { ctx, W, H } = setupCanvas(c);
+  const padL = 44, padR = 44, padT = 8, padB = 22;
+  const pw = W - padL - padR, ph = H - padT - padB;
+  // left axis: bilirubin 0..max
+  const biMax = Math.max(ULN.bili * 1.5, Math.max(...bili) * 1.1, 1.5);
+  // right axis: albumin around 2..5.5
+  const aMin = 2.0, aMax = Math.max(5.5, Math.max(...alb) + 0.2);
+  const xOf = d => padL + (d/DAYS) * pw;
+  const yBili = v => padT + (1 - v/biMax) * ph;
+  const yAlb  = v => padT + (1 - (v - aMin)/(aMax - aMin)) * ph;
+
+  // terbinafine window
+  ctx.fillStyle = 'rgba(192,138,240,0.07)';
+  ctx.fillRect(xOf(p.terbStart-1), padT, xOf(p.terbEnd) - xOf(p.terbStart-1), ph);
+
+  // axes labels
+  ctx.fillStyle = '#8b93a3'; ctx.font = '11px ui-sans-serif, system-ui, sans-serif';
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let i = 0; i <= 3; i++) {
+    const v = (i/3) * biMax; const y = yBili(v);
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+pw,y); ctx.stroke();
+    ctx.fillText(v.toFixed(1), padL-6, y);
+  }
+  ctx.textAlign = 'left';
+  for (let i = 0; i <= 3; i++) {
+    const v = aMin + (i/3)*(aMax-aMin); const y = yAlb(v);
+    ctx.fillText(v.toFixed(1), padL+pw+6, y);
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let d = 0; d <= DAYS; d += 40) {
+    ctx.fillText(String(d), xOf(d), padT + ph + 4);
+  }
+
+  // ULN bili
+  ctx.save(); ctx.setLineDash([4,4]); ctx.strokeStyle = '#f4c25a';
+  const y = yBili(ULN.bili); ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+pw,y); ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle = '#f4c25a'; ctx.textAlign='left'; ctx.textBaseline='bottom';
+  ctx.fillText('ULN bili 1.2', padL+4, y-2);
+
+  // LLN albumin
+  ctx.save(); ctx.setLineDash([4,4]); ctx.strokeStyle = '#e25555';
+  const ya = yAlb(LLN_alb); ctx.beginPath(); ctx.moveTo(padL,ya); ctx.lineTo(padL+pw,ya); ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle = '#e25555'; ctx.textAlign='right'; ctx.textBaseline='bottom';
+  ctx.fillText('LLN alb 3.5', padL+pw-4, ya-2);
+
+  // plot
+  function plot(arr, color, lw, yf) {
+    ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.beginPath();
+    for (let d = 0; d <= DAYS; d++) {
+      const x = xOf(d), y = yf(arr[d]);
+      if (d === 0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+  plot(bili, getComputedStyle(document.documentElement).getPropertyValue('--bili').trim(), 1.8, yBili);
+  plot(alb,  getComputedStyle(document.documentElement).getPropertyValue('--alb').trim(),  1.8, yAlb);
+}
+
+// ---------- pristine field tracking ----------
+function setupPristine() {
+  document.querySelectorAll('input, select').forEach(el => {
+    el.classList.add('pristine');
+    const drop = () => el.classList.remove('pristine');
+    el.addEventListener('input', drop, { once: true });
+    el.addEventListener('change', drop, { once: true });
+  });
+}
+
+// ---------- wire up ----------
+['terbStart','terbEnd','recovery','terbCum','alcInsult','ibuInsult','synergy',
+ 'b_alt','b_ast','b_alp','b_bili','b_dbili','b_alb','b_tp']
+  .forEach(id => $(id).addEventListener('input', simulate));
+
+// dose <-> insult linkage. The hidden coupling is "sensitivity" (insult per mg).
+// Editing dose: keep sensitivity, rescale insult. Editing insult: keep dose, derive new sensitivity.
+let _sensitivity = (+$('terbInsult').value) / (+$('terbDose').value || 1);
+function refreshSenseRead() {
+  $('senseRead').textContent = _sensitivity.toFixed(5);
+}
+refreshSenseRead();
+let _suppress = false;
+$('terbDose').addEventListener('input', () => {
+  if (_suppress) return;
+  const dose = +$('terbDose').value;
+  _suppress = true;
+  $('terbInsult').value = (_sensitivity * dose).toFixed(2);
+  _suppress = false;
+  simulate();
+});
+$('terbInsult').addEventListener('input', () => {
+  if (_suppress) return;
+  const dose = +$('terbDose').value;
+  const ins = +$('terbInsult').value;
+  if (dose > 0) {
+    _sensitivity = ins / dose;
+    refreshSenseRead();
+  }
+  simulate();
+});
+
+$('addEv').addEventListener('click', () => {
+  addEvent(+$('evDay').value, $('evType').value, +$('evCount').value);
+});
+$('clearEv').addEventListener('click', clearEvents);
+$('presetWeekend').addEventListener('click', () => {
+  for (let w = 0; w < 12; w++) {
+    const fri = 5 + w*7, sat = 6 + w*7;
+    if (fri <= DAYS) ensureDay(fri).alcohol += 2;
+    if (sat <= DAYS) ensureDay(sat).alcohol += 3;
+  }
+  renderEvents(); simulate();
+});
+$('presetIbu').addEventListener('click', () => {
+  for (let d = 30; d <= 45; d++) ensureDay(d).ibuprofen += 1;
+  renderEvents(); simulate();
+});
+
+window.addEventListener('resize', simulate);
+
+setupPristine();
+renderEvents();
+simulate();
+</script>
+
+
+</body></html>

@@ -10,4 +10,5 @@
 - [erasure-calc](./erasure-calc) : Rule of thumb for erasure coding parity & hot spares. `./erasure.py -n 16 -s 24000` → 10+4+2hs. Check out [the webUI](./erasure-calc/webUI.html)!
 - [dhcp-client-annotator](./dhcp-client-annotator) : Annotate DHCP clients with human-readable names. Track devices coming/going. `./main.sh watch-diff`
 - [ratphone](./ratphone) : unfinished project to make a computer that auto-reconnects to android debugger and exposes scrcpy
+- [liver-sim](./liver-sim) : liver stress sim to get a feel for how bad terbinafine is. (tl;dr: tolerably bad if you're genetically predisposed, otherwise mild).
 
