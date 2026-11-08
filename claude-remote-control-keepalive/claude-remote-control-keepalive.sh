@@ -210,10 +210,12 @@ EOF
   >&2 cat <<EOF
 
 Plumbing:
-  _list-claude-config-dirs                          \$CLAUDE_CONFIG_DIR, ~/.claude, and each running claude's, if they have sessions/
+  _proc-config-dirs                                 a.k.a. _config-dirs-of-all-claude-pids
+  _config-dirs                                      a.k.a. _list-claude-config-dirs  \$CLAUDE_CONFIG_DIR, ~/.claude, and each running claude's, if they have sessions/
+  _field <file> <key>                               a.k.a. _value-of-key-in-json-file <file> <key>
   _list-session-files-from-config-dirs              registry files of live sessions (pid and procStart match)
   _list-session-files-matching-targets <target>...  live session files filtered by target
-  _remote-control-is-on <file>                      exit 0 if the session has a bridgeSessionId
+  _rc-on <file>                                     a.k.a. _remote-control-is-on <file>
   _turn-on-remote-control <file>                    type /remote-control into its tmux pane, or via claude attach for bg
   _tmux-pane-of-session <file>                      its tmux pane id, if any
   _input-line-in-pane <pane>                        the raw ❯ input line under the ─ rule
