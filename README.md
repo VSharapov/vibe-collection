@@ -12,3 +12,4 @@
 - [ratphone](./ratphone) : unfinished project to make a computer that auto-reconnects to android debugger and exposes scrcpy
 - [liver-sim](./liver-sim) : liver stress sim to get a feel for how bad terbinafine is. (tl;dr: tolerably bad if you're genetically predisposed, otherwise mild).
 
+- [claude-remote-control-keepalive](./claude-remote-control-keepalive) : Keep Claude Code Remote Control switched on for chosen sessions, re-enabled from cron every 5 min. `./claude-remote-control-keepalive.sh enable my-session`
