@@ -20,8 +20,8 @@ normalize-mac() {
   tr '[:upper:]' '[:lower:]' | tr -d ':'
 }
 
-strip-hostname() {
-  cut -c1-36,68-  # keep MAC+IP+annotation, skip hostname (unreliable)
+strip-hostname() {  # some devices change hostname frequently; ignore for annotated
+  awk '{a=substr($0,68); if(a~/[^ ]/) print substr($0,1,36) a; else print}'
 }
 
 annotate() {
