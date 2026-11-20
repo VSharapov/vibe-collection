@@ -2,14 +2,7 @@
 
 Expose all functions via `"$@"`. Internal functions are first-class.
 
-## Naming
-
-- Plumbing starts with `_`; porcelain doesn't. The name says which layer you're calling.
-- Function names are self-explanatory at the definition. If a long name is called often, prepend a one-line shortname wrapper on the line above it.
-
-## Usage
-
-`usage` lists porcelain only. `usage --verbose` also lists plumbing and env vars: plumbing is first-class, so it's documented, just not up front. Wrappers show both names: `_short <args>   a.k.a. _long-clear-name <args>`.
+Function names are self-explanatory at the definition. If a long name is called often, prepend a one-line shortname wrapper; usage shows both.
 
 ## Single-file (simple tools)
 
@@ -17,7 +10,9 @@ Expose all functions via `"$@"`. Internal functions are first-class.
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-_small-composable-unit() { echo "one"; }
+CMD_FIRST_WORD="${CMD_FIRST_WORD:-one}"
+
+_small-composable-unit() { echo "$CMD_FIRST_WORD"; }
 _u2() { _another-unit-with-a-long-name "$@"; }
 _another-unit-with-a-long-name() { echo "two"; }
 porcelain() { _small-composable-unit; _u2; }
@@ -29,11 +24,14 @@ Usage: cmd <command> [args...]
   usage --verbose    also list plumbing
 EOF
   [[ ${1:-} == --verbose ]] || return 0
-  >&2 cat <<'EOF'
+  >&2 cat <<EOF
 
 Plumbing:
   _small-composable-unit
   _u2                a.k.a. _another-unit-with-a-long-name
+
+Env:
+  CMD_FIRST_WORD=$CMD_FIRST_WORD
 EOF
 }
 
