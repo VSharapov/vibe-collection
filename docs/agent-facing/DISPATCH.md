@@ -10,13 +10,28 @@ Function names are self-explanatory at the definition. If a long name is called 
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-plumbing1() { echo "small composable unit"; }
-plumbing2() { echo "another small unit"; }
-porcelain() { plumbing1; plumbing2; }
+CMD_FIRST_WORD="${CMD_FIRST_WORD:-one}"
 
-usage() { cat <<'EOF'
+_small-composable-unit() { echo "$CMD_FIRST_WORD"; }
+_u2() { _another-unit-with-a-long-name "$@"; }
+_another-unit-with-a-long-name() { echo "two"; }
+porcelain() { _small-composable-unit; _u2; }
+
+usage() {
+  >&2 cat <<'EOF'
 Usage: cmd <command> [args...]
-Commands: plumbing1, plumbing2, porcelain
+  porcelain          does the thing
+  usage --verbose    also list plumbing
+EOF
+  [[ ${1:-} == --verbose ]] || return 0
+  >&2 cat <<EOF
+
+Plumbing:
+  _small-composable-unit
+  _u2                a.k.a. _another-unit-with-a-long-name
+
+Env:
+  CMD_FIRST_WORD=$CMD_FIRST_WORD
 EOF
 }
 
@@ -24,7 +39,7 @@ EOF
 "$@"
 ```
 
-Test any function directly: `./script.sh plumbing1`
+Test any function directly: `./script.sh _small-composable-unit`
 
 ## Multi-file (deep command trees)
 
@@ -72,7 +87,7 @@ See: [examples/multi-file/](./examples/multi-file/)
 - Sourcing loads function definitions only (guard bails before dispatch)
 - `"$@"` dispatches to any function in the tree
 - Each file independently runnable and testable
-- No case statements, no wrapper functions
+- No case statements, no dispatch wrappers
 
 ## When it gets complex
 
