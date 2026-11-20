@@ -5,9 +5,9 @@
 Test plumbing functions directly:
 
 ```bash
-./script.sh usage
-./script.sh some-plumbing arg1 arg2
-./script.sh another-plumbing < input.txt
+./script.sh usage --verbose
+./script.sh _some-plumbing arg1 arg2
+./script.sh _another-plumbing < input.txt
 ```
 
 ## With sudo

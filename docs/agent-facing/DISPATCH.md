@@ -2,7 +2,14 @@
 
 Expose all functions via `"$@"`. Internal functions are first-class.
 
-Function names are self-explanatory at the definition. If a long name is called often, prepend a one-line shortname wrapper; usage shows both.
+## Naming
+
+- Plumbing starts with `_`; porcelain doesn't. The name says which layer you're calling.
+- Function names are self-explanatory at the definition. If a long name is called often, prepend a one-line shortname wrapper on the line above it.
+
+## Usage
+
+`usage` lists porcelain only. `usage --verbose` also lists plumbing and env vars: plumbing is first-class, so it's documented, just not up front. Wrappers show both names: `_short <args>   a.k.a. _long-clear-name <args>`.
 
 ## Single-file (simple tools)
 
@@ -10,13 +17,23 @@ Function names are self-explanatory at the definition. If a long name is called 
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-plumbing1() { echo "small composable unit"; }
-plumbing2() { echo "another small unit"; }
-porcelain() { plumbing1; plumbing2; }
+_small-composable-unit() { echo "one"; }
+_u2() { _another-unit-with-a-long-name "$@"; }
+_another-unit-with-a-long-name() { echo "two"; }
+porcelain() { _small-composable-unit; _u2; }
 
-usage() { cat <<'EOF'
+usage() {
+  >&2 cat <<'EOF'
 Usage: cmd <command> [args...]
-Commands: plumbing1, plumbing2, porcelain
+  porcelain          does the thing
+  usage --verbose    also list plumbing
+EOF
+  [[ ${1:-} == --verbose ]] || return 0
+  >&2 cat <<'EOF'
+
+Plumbing:
+  _small-composable-unit
+  _u2                a.k.a. _another-unit-with-a-long-name
 EOF
 }
 
@@ -24,7 +41,7 @@ EOF
 "$@"
 ```
 
-Test any function directly: `./script.sh plumbing1`
+Test any function directly: `./script.sh _small-composable-unit`
 
 ## Multi-file (deep command trees)
 
@@ -72,7 +89,7 @@ See: [examples/multi-file/](./examples/multi-file/)
 - Sourcing loads function definitions only (guard bails before dispatch)
 - `"$@"` dispatches to any function in the tree
 - Each file independently runnable and testable
-- No case statements, no wrapper functions
+- No case statements, no dispatch wrappers
 
 ## When it gets complex
 
