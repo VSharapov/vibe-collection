@@ -68,6 +68,27 @@ _list-session-files-matching-targets() {
   _list-session-files-from-config-dirs | while read -r f; do _session-matches-any-target "$f" "$@" || continue; echo "$f"; done
 }
 
+_retired-bg-sessions-matching-id-targets() {
+  local d
+  for d in $(_config-dirs); do
+    CLAUDE_CONFIG_DIR=$d "$CLAUDE_BIN" agents --json --all </dev/null 2>/dev/null | jq -r --arg d "$d" '
+      .[] | select(.kind == "background" and .pid == null) | . as $s
+      | select(any($ARGS.positional[] | select(contains("/") | not); . == $s.id or . == $s.sessionId or . == $s.name))
+      | [$d, .id, (.name // .id)] | @tsv' --args "$@" || true
+  done
+}
+
+_respawn-bg-session-and-wait() {
+  local d=$1 id=$2 i
+  CLAUDE_CONFIG_DIR=$d "$CLAUDE_BIN" respawn "$id" </dev/null >/dev/null 2>&1 || { echo "respawn failed"; return 1; }
+  for i in $(seq "$RC_KEEPALIVE_WAIT"); do
+    [[ -n $(_list-session-files-matching-targets "$id") ]] && { echo "respawned"; return; }
+    sleep 1
+  done
+  echo "respawned, not live yet"
+  return 1
+}
+
 _rc-on() { _remote-control-is-on "$@"; }
 _remote-control-is-on() { jq -e '.bridgeSessionId' "$1" >/dev/null 2>&1; }
 
@@ -163,7 +184,11 @@ _take-single-run-lock() { exec 9>"$RC_KEEPALIVE_LOCK"; flock -n 9; }
 tick() {
   [[ $# -gt 0 ]] || { usage; exit 1; }
   _take-single-run-lock || exit 0
-  local f r
+  local f r d id name
+  while IFS=$'\t' read -r d id name; do
+    r=$(_respawn-bg-session-and-wait "$d" "$id") || true
+    >&2 echo "$(date +%FT%T) $name $r"
+  done < <(_retired-bg-sessions-matching-id-targets "$@")
   for f in $(_list-session-files-matching-targets "$@"); do
     _rc-on "$f" && continue
     r=$(_turn-on-remote-control "$f") || true
@@ -197,7 +222,7 @@ A target is a sessionId, jobId or session name, or a dir (anything with a /) mat
 Usage: ${0##*/} <command> [args...]
   enable <target>...   add or replace this script's crontab line
   disable              remove it
-  tick <target>...     what cron runs: type /remote-control into targets whose RC is off
+  tick <target>...     what cron runs: respawn retired bg targets (by id or name), type /remote-control into targets whose RC is off
   status [target...]   live sessions (all if no target): name, job, status, rc, via, cwd
   usage --verbose      also list plumbing and env vars
 
@@ -215,6 +240,8 @@ Plumbing:
   _field <file> <key>                               a.k.a. _value-of-key-in-json-file <file> <key>
   _list-session-files-from-config-dirs              registry files of live sessions (pid and procStart match)
   _list-session-files-matching-targets <target>...  live session files filtered by target
+  _retired-bg-sessions-matching-id-targets <target>...  config dir, id, name of bg sessions Claude's daemon retired; dir targets ignored
+  _respawn-bg-session-and-wait <config-dir> <id>    claude respawn, then wait until it is live
   _rc-on <file>                                     a.k.a. _remote-control-is-on <file>
   _turn-on-remote-control <file>                    type /remote-control into its tmux pane, or via claude attach for bg
   _tmux-pane-of-session <file>                      its tmux pane id, if any
